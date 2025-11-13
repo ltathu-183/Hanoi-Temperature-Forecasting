@@ -1,0 +1,1041 @@
+import sys
+from pathlib import Path
+import streamlit as st
+import pandas as pd
+from datetime import datetime, timedelta, date
+import subprocess
+import numpy as np
+import joblib
+import threading
+from typing import Optional, Dict, Any
+import plotly.graph_objects as go
+import os
+import traceback
+
+import sys
+from pathlib import Path
+
+project_root = Path(__file__).parent  
+sys.path.append(str(project_root))
+
+def setup_paths() -> Dict[str, Path]:
+    """Initialize and validate all file paths"""
+    try:
+        current_dir = Path(__file__).parent
+        project_root = current_dir
+        data_dir = current_dir / "data"
+        model_dir = current_dir / "models"
+        codes_dir = current_dir / "codes"
+        
+        paths = {
+            'data_dir': data_dir,
+            'model_dir': model_dir,
+            'codes_dir': codes_dir,
+            'project_root': project_root,
+            'data_file': data_dir / "realtime" / "hanoi_weather_complete.csv",
+            'update_script': codes_dir / "update_weather_data.py",
+            'model_file': model_dir / "daily" / "BEST_CATBOOST_TIMESERIES.joblib",
+            'selection_file': model_dir / "daily" / "selection_result.joblib"
+        }
+        
+        # Add to Python path safely
+        if project_root.exists() and str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        if codes_dir.exists() and str(codes_dir) not in sys.path:
+            sys.path.insert(0, str(codes_dir))
+        if model_dir.exists() and str(model_dir) not in sys.path:
+            sys.path.insert(0, str(model_dir))
+        if data_dir.exists() and str(data_dir) not in sys.path:
+            sys.path.insert(0, str(data_dir))
+        return paths
+    except Exception as e:
+        st.error(f"Path configuration error: {e}")
+        # Fallback paths
+        current_dir = Path(__file__).parent
+        return {
+            'data_file': current_dir / "data" / "realtime" / "hanoi_weather_complete.csv",
+            'update_script': current_dir / "codes" / "update_weather_data.py",
+            'model_file': current_dir / "models" / "daily" / "BEST_CATBOOST_TIMESERIES.joblib",
+            'selection_file': current_dir / "models" / "selection_result.joblib"
+        }
+
+PATHS = setup_paths()
+
+# --------------------------
+# DATA MANAGEMENT
+# --------------------------
+def safe_data_update():
+    """Run data update in background with comprehensive error handling"""
+    if not PATHS['update_script'].exists():
+        st.sidebar.warning(f"Update script not found at: {PATHS['update_script']}")
+        return False
+    
+    def update_thread():
+        try:
+            # Use the project root as working directory (where the update script expects to run)
+            working_dir = PATHS['project_root']
+            
+            # Build the command - make sure we're using the same Python that runs the app
+            cmd = [sys.executable, str(PATHS['update_script'])]
+            
+            # Run the update script with the same environment
+            result = subprocess.run(
+                cmd,
+                cwd=working_dir,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env=os.environ  # Pass the current environment
+            )
+            
+            # Detailed logging of results
+            print(f"[update] Return code: {result.returncode}")
+            
+            if result.returncode == 0:
+                print("✅ Weather data updated successfully")
+                if result.stdout:
+                    print(f"Update output: {result.stdout}")
+            else:
+                print(f"Update failed with return code: {result.returncode}")
+                if result.stderr:
+                    print(f"Update stderr: {result.stderr}")
+                if result.stdout:
+                    print(f"Update stdout: {result.stdout}")
+                    
+        except subprocess.TimeoutExpired:
+            print("Update timed out after 120 seconds")
+        except Exception as e:
+            print(f" Update error: {e}")
+            import traceback
+            print(f" Update traceback: {traceback.format_exc()}")
+    
+    # Start the update in a background thread
+    thread = threading.Thread(target=update_thread, daemon=True)
+    thread.start()
+    
+    st.sidebar.info("Update started in background...")
+    return True
+@st.cache_data(ttl=1800)
+def load_csv() -> pd.DataFrame:
+    """Load weather data with comprehensive error handling"""
+    try:
+        if not PATHS['data_file'].exists():
+            # Create fallback data if file doesn't exist
+            st.warning("Data file not found. Using synthetic data.")
+            return create_fallback_data()
+        
+        df = pd.read_csv(PATHS['data_file'], parse_dates=["datetime"])
+        df = df.sort_values("datetime").reset_index(drop=True)
+        
+        
+        # Data quality checks
+        if df.empty:
+            st.warning("Data file is empty")
+            return create_fallback_data()
+            
+        return df
+        
+    except Exception as e:
+        st.error(f"Data loading failed: {e}")
+        return create_fallback_data()
+
+def create_fallback_data() -> pd.DataFrame:
+    """Create synthetic data when real data is unavailable"""
+    dates = pd.date_range(start='2024-01-01', end=datetime.now(), freq='D')
+    data = {
+        'datetime': dates,
+        'date': [d.date() for d in dates],
+        'temp': np.random.normal(27, 3, len(dates)),
+        'tempmin': np.random.normal(24, 2, len(dates)),
+        'tempmax': np.random.normal(32, 2, len(dates)),
+        'conditions': ['Partly Cloudy'] * len(dates),
+        'humidity': np.random.normal(75, 10, len(dates)),
+        'precip': np.random.normal(10, 5, len(dates)),
+        'windspeed': np.random.normal(10, 3, len(dates)),
+        'winddir': np.random.normal(180, 90, len(dates)),
+        'uvindex': np.random.randint(1, 11, len(dates))
+    }
+    return pd.DataFrame(data)
+
+def get_historical_averages(df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate historical averages for fallback forecasting"""
+    try:
+        df = df.copy()
+        df["doy"] = df["datetime"].dt.dayofyear
+        cutoff = pd.Timestamp("today") - pd.Timedelta(days=14)
+        hist = df[df["datetime"] < cutoff]
+        
+        if hist.empty:
+            return pd.DataFrame({
+                "doy": range(1, 367),
+                "tempmin": [24.0] * 366,
+                "tempmax": [32.0] * 366
+            })
+        
+        averages = hist.groupby("doy")[["tempmin", "tempmax"]].mean().reset_index()
+        full_doy = pd.DataFrame({"doy": range(1, 367)})
+        averages = full_doy.merge(averages, on="doy", how="left")
+        averages = averages.ffill().bfill()
+        return averages
+    except Exception:
+        # Fallback averages
+        return pd.DataFrame({
+            "doy": range(1, 367),
+            "tempmin": [24.0] * 366,
+            "tempmax": [32.0] * 366
+        })
+def get_weather_predictions(df, today):
+    """Get weather predictions with detailed debugging"""
+    try:
+        # Import here to ensure fresh import with correct paths
+        from codes.preprocess_data import predict_future
+        
+        # Check if model files exist
+        model_exists = PATHS['model_file'].exists()
+        selection_exists = PATHS['selection_file'].exists()
+        
+        if not model_exists or not selection_exists:
+            st.error(f"Model files not found. Model: {model_exists}, Selection: {selection_exists}")
+            return create_fallback_predictions(df, today)
+        
+        # Check if dataframe has required columns
+        required_cols = ['name', 'datetime', 'tempmax', 'tempmin', 'temp', 'feelslikemax',
+                        'feelslikemin', 'feelslike', 'dew', 'humidity', 'precip', 'precipprob',
+                        'precipcover', 'preciptype', 'snow', 'snowdepth', 'windgust',
+                        'windspeed', 'winddir', 'sealevelpressure', 'cloudcover', 'visibility',
+                        'solarradiation', 'solarenergy', 'uvindex', 'severerisk', 'sunrise',
+                        'sunset', 'moonphase', 'conditions', 'description', 'icon', 'stations']
+        
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            st.error(f"Missing required columns: {missing_cols}")
+            return create_fallback_predictions(df, today)
+        
+        if len(df) < 30:
+            st.error(f"Not enough data rows. Need 30, have {len(df)}")
+            return create_fallback_predictions(df, today)
+        
+        df = df.sort_values("datetime").reset_index(drop=True)
+        predict_results = predict_future(df[-60:])
+        
+        if isinstance(predict_results, pd.DataFrame):
+            if not predict_results.empty:
+                if 'y_pred' in predict_results.columns and 'date' in predict_results.columns:
+                    predict_results['temp'] = predict_results['y_pred'].astype(float)
+                    predict_results['date'] = pd.to_datetime(predict_results['date'])
+                    return predict_results[['date', 'temp']]
+                else:
+                    st.error("Prediction results missing required columns")
+            else:
+                st.error("Prediction returned empty DataFrame")
+        else:
+            st.error(f"Prediction failed with return code: {predict_results}")
+            
+        return create_fallback_predictions(df, today)
+
+    except Exception as e:
+        st.error(f" Error during prediction: {str(e)}")
+        import traceback
+        st.error(f"Detailed error: {traceback.format_exc()}")
+        return create_fallback_predictions(df, today)
+
+def create_fallback_predictions(df, today):
+    """Create robust fallback predictions when model fails"""
+    try:
+        averages = get_historical_averages(df)
+        future_dates = [today + timedelta(days=i+1) for i in range(5)]
+        
+        predictions = []
+        for i, target_date in enumerate(future_dates):
+            doy = target_date.timetuple().tm_yday
+            
+            # Get historical average for this day of year
+            avg_row = averages[averages['doy'] == doy]
+            
+            if not avg_row.empty:
+                temp = (avg_row['tempmin'].iloc[0] + avg_row['tempmax'].iloc[0]) / 2
+            else:
+                # Use overall average if specific day not found
+                temp = 27.0
+            
+            predictions.append({
+                "date": pd.Timestamp(target_date),  # Ensure datetime type
+                "temp": temp
+            })
+        
+        return pd.DataFrame(predictions)
+        
+    except Exception as e:
+        st.error(f"Fallback prediction also failed: {e}")
+        # Ultimate fallback - simple predictions
+        future_dates = [today + timedelta(days=i+1) for i in range(5)]
+        return pd.DataFrame({
+            "date": [pd.Timestamp(d) for d in future_dates],  # Ensure datetime
+            "temp": [27.0, 27.5, 26.8, 28.0, 27.2]
+        })
+
+
+# --------------------------
+# STREAMLIT UI SETUP
+# --------------------------
+def setup_page():
+    """Configure Streamlit page and styles"""
+
+    st.set_page_config(
+        page_title="Hanoi Weather Forecast",
+        page_icon="🌤️",
+        layout="wide",
+        initial_sidebar_state="expanded",
+        menu_items=None
+    )
+    st.markdown("""
+    <style>
+    /* MAIN APP - White background */
+    .stApp {
+        background: #f9faff !important;
+        color: #1e293b !important;
+    }
+
+    /* REMOVE ALL TOP/BOTTOM PADDING */
+    .main .block-container {padding:0rem !important;}
+
+    .stDateInput input {
+        color: black !important;
+        background-color: white !important;
+    }
+    .stDateInput label {
+        color: black !important;
+    }
+    /* Style the temperature trend chart background */
+    div[data-testid="stChart"] {
+        background-color: white !important;
+        padding: 0.1rem !important;
+        border-radius: 12px !important;
+    }               
+    .temperature-trend-container {
+        background-color: #ffffff !important;
+    }
+
+    .temperature-trend-container div[data-testid="stChart"] {
+        background-color: #ffffff !important;
+    }
+    .stButton > button {
+        background-color: #ffffff !important;     /* White background */
+        color: #000000 !important;                /* Black text */
+        border: 1px solid #cccccc !important;     /* Light gray border */
+        border-radius: 8px !important;
+        padding: 10px 16px !important;
+        font-size: 1rem !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease !important;
+    }
+    /* Also fix the SVG/chart internals if needed */
+    .stLineChart svg {
+        background-color: #ffffff !important;
+    }         
+    /* WIDER SIDEBAR */
+    section[data-testid="stSidebar"] {
+        background: #2e3190  !important;
+        min-width: 410px !important;
+        max-width: 600px !important;
+    }
+    
+    /* SIDEBAR */
+    section[data-testid="stSidebar"] * {
+        color: #ffffff !important;
+    }
+    .sidebar-title {
+        font-size: 1.5rem !important;
+        font-weight: 600 !important;
+        color: white !important;
+        margin-bottom: 1rem !important;
+    }
+    section[data-testid="stSidebar"] .stButton>button {
+        background: #575ea5 !important;
+        color: #ffffff !important;
+        border-radius: 15px;
+        width: 90%;
+        padding: 12px;
+        margin: 3px 0;
+        font-size: 2rem;
+        font-weight: 500;
+        border: 0px;
+        transition: all 0.2s;
+    }
+    
+    section[data-testid="stSidebar"] .stButton>button:hover {
+        background: #79a8e7  !important;
+        color: #182850  !important;
+        transform: translateX(4px);
+    }
+    
+    section[data-testid="stSidebar"] .stButton>button[aria-pressed="true"] {
+        background: #79a8e7  !important;
+        color: #ffffff !important;
+        font-weight: bold;
+    }                        
+    /* TITLES - Left aligned */
+    .left-title {
+        text-align: left !important;
+        margin-top: 0rem !important;
+        margin-bottom: 0rem !important;
+        padding: 0rem 0rem !important;       
+        font-size: 1.9rem !important;
+        font-weight: 600 !important;
+    }
+    
+    .left-date {
+        text-align: left !important;
+        color: #000000 !important;
+        margin-top: 0rem !important;
+        margin-bottom: 0rem !important;
+        padding: 0.2rem 0rem !important;
+        font-size: 1rem !important;
+        font-weight: 400 !important;
+    }
+
+    /* SINGLE CONTAINER FOR ALL CURRENT WEATHER */
+    .current-weather-full-container {
+        background: #2e3190;
+        color: #ffffff;
+        border-radius: 16px;
+        padding: 0rem 1rem;
+        margin: 0rem auto 0rem auto; 
+        width: 100%; /* Stretch to full width */
+        max-width: none; /* Remove max-width constraint */
+        box-shadow: 0 10px 17px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: center; 
+        height: 32vh;
+    }
+
+    .current-weather-heading {
+        text-align: right;
+        color: white;
+        margin: 0 0 0.2rem 0;
+        font-size: 0.4rem;
+        font-weight: 550;
+        padding: 0;
+    }
+                
+    .weather-header {
+        display: flex;
+        align-items: center; /* Keep everything vertically centered */
+        gap: 1rem; /* Reduced from 2rem/3rem to tighten space */
+        margin-top: 0rem;
+        margin-bottom: 0rem;
+        padding: 0rem 0rem;
+        flex-wrap: wrap; /* Allow wrapping on small screens */
+        justify-content: center; /* Center the header content */
+        text-align: center; 
+    }
+
+    .weather-icon-temp {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem; /* slightly more breathing room */
+    }
+    
+    .weather-icon {
+        font-size: 4.2rem !important;
+    }
+    
+    .weather-temp {
+        font-size: 2.5rem !important;
+        font-weight: bold !important;
+        color: #ffffff !important;
+    }
+    
+    .weather-condition {
+        text-align: left;
+        font-size: 1rem !important;
+        color: #ffffff !important;
+    }
+    
+    .weather-minmax {
+        font-size: 1rem !important;
+        color: #ffffff !important;
+        text-align: right;
+    }
+
+    /* METRICS ROW - inside the same container */
+    .weather-metrics-row {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10rem;
+    }
+    
+    .weather-metric-item {
+        text-align: center;
+        min-width: 80px;
+        line-height: 1; 
+    }
+    }
+    
+    .metric-value {
+        font-size: 0.8rem;
+        font-weight: bold;
+        color: ffffff;
+    }
+    
+    .metric-label {
+        font-size: 0.7rem;
+        color: #ffffff;
+        margin-top: 0.25rem;
+    }
+
+
+    /* FORECAST CARDS */
+    .forecast-card {
+        background: transparent !important; /* or remove background property */
+        box-shadow: 0 10px 17px rgba(0,0,0,0.1);
+        padding-top: 0.6rem;
+        padding-bottom: 0rem;
+        border-radius: 15px;
+        text-align: center;
+        height: 100%;
+    }
+
+    /* Style the parent div that Streamlit creates */
+    div[data-testid="column"] > div:nth-child(1) {
+        background: #ffffff !important;
+        border-radius: 15px;
+        padding: 0.6rem 0 !important;
+        height: 100%;
+    }
+        
+    .forecast-card .icon {
+        font-size: 5rem !important;
+        margin: 0rem 0;
+    }
+    
+    .forecast-card .temp {
+        font-size: 1.2rem !important;
+        font-weight: bold !important;
+        padding = 0rem !important;
+    }
+    
+    /* Remove table borders */
+    .current-weather-table, .current-weather-table td {
+        border: none !important;
+        background: transparent !important;
+    }
+    .forecast-card-table, .forecast-card-table td {
+        border: none !important;
+        background: transparent !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --------------------------
+# RENDERING FUNCTIONS - UPDATED LAYOUT
+# --------------------------
+def render_forecasting(df, today):
+    """Render main forecasting page with updated layout"""
+    try:
+        # Title and date on the LEFT
+        st.markdown(f"<h1 class='left-title' style='margin:0.1rem;'>HANOI WEATHER FORECAST</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h3 class='left-date'>{today.strftime('%d/%m/%Y')}</h3>", unsafe_allow_html=True)
+
+        # Get model predictions or fallback
+        future_df = get_weather_predictions(df, today)
+        
+        # Display current weather - CENTERED
+        render_current_weather(df, today)
+                
+        # Display forecast
+        render_forecast_cards(df, today, future_df)
+        
+        # Display temperature trend
+        render_temperature_trend(future_df)
+        
+    except Exception as e:
+        st.error(f"Forecast rendering error: {e}")
+        # Provide more detailed error information
+        import traceback
+        st.error(f"Full error details: {traceback.format_exc()}")
+        render_fallback_forecast(df, today)
+
+def render_current_weather(df, today):
+    """Render current weather section - ALL in one container"""
+    try:
+        # Ensure we have a date column
+        if 'date' not in df.columns and 'datetime' in df.columns:
+            df['date'] = df['datetime'].dt.date
+        
+        row_today = df[df["date"] == today]
+        if not row_today.empty:
+            r = row_today.iloc[0]
+            temp = float(r.get("temp", 27))
+            tmax = float(r.get("tempmax", 30))
+            tmin = float(r.get("tempmin", 23))
+            cond = str(r.get("conditions", "Rainy")).split(",")[0]
+
+            # Weather icon mapping
+            icon_map = {
+                "Clear": "☀️", "Partly Cloudy": "🌤️", "Cloudy": "☁️", "Light Rain": "🌧️",
+                "Rain": "🌧️", "Heavy Rain": "⛈️", "Snow": "❄️", "Thunderstorm": "⚡",
+                "Fog": "🌫️", "Windy": "💨", "Mostly Cloudy": "⛅", "Rainy": "🌧️",
+                "Partly cloudy": "🌤️", "Overcast": "☁️", "Sunny": "☀️"
+            }
+            icon = icon_map.get(cond, "🌤️")
+
+            # SINGLE CONTAINER: icon, temp, min/max, AND metrics
+            st.markdown(
+                f"""
+                <div class="current-weather-full-container">
+                    <h3 class="current-weather-heading" margin-top:0rem; font-size:1.5rem; color: #ffffff; text-align: right;'>Current Weather</h3>
+                    <div class="weather-header">
+                        <div class="weather-icon-temp">
+                            <div class="weather-icon">{icon}</div>
+                            <div>
+                                <div class="weather-temp">{temp:.0f}°C</div>
+                                <div class="weather-condition" style="display:flex; align-items:center;">
+                                    {cond}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="weather-minmax">
+                            Max: {tmax:.0f}°C<br>Min: {tmin:.0f}°C
+                        </div>
+                    </div>
+                    <div class="weather-metrics-row">
+                        <div class="weather-metric-item">
+                            <div class="metric-value">💧 {r.get('humidity', 33):.0f}%</div>
+                            <div class="metric-label">Humidity</div>
+                        </div>
+                        <div class="weather-metric-item">
+                            <div class="metric-value">🌧️ {r.get('precip', 34):.0f}%</div>
+                            <div class="metric-label">Precip</div>
+                        </div>
+                        <div class="weather-metric-item">
+                            <div class="metric-value">🧭 {r.get('winddir', 67):.0f}°</div>
+                            <div class="metric-label">Wind direction</div>
+                        </div>
+                        <div class="weather-metric-item">
+                            <div class="metric-value">🌬️ {r.get('windspeed', 67):.1f}</div>
+                            <div class="metric-label">Wind speed</div>
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.warning("No current weather data available")
+    except Exception as e:
+        st.error(f"Error rendering current weather: {e}")
+
+def render_forecast_cards(df, today, future_df):
+    """Render forecast cards with better error handling."""
+    st.markdown("<h3 style='text-align:left; margin-top:0rem; font-size:1.5rem;'>Next 5 Days Temperature Forecast</h3>", unsafe_allow_html=True)
+    
+    cols = st.columns(5)
+    
+    # Ensure we have a valid DataFrame with proper columns
+    if future_df is None or future_df.empty:
+        st.warning("No forecast data available. Using fallback predictions.")
+        future_df = create_fallback_predictions(df, today)
+    
+    # Ensure required columns exist with proper data types
+    if 'date' not in future_df.columns:
+        future_df['date'] = [pd.Timestamp(today + timedelta(days=i+1)) for i in range(len(future_df))]
+    
+    if 'temp' not in future_df.columns:
+        future_df['temp'] = 27.0  # Default temperature
+    
+    # Ensure dates are proper datetime objects
+    try:
+        future_df['date'] = pd.to_datetime(future_df['date'])
+    except Exception as e:
+        st.warning(f"Date conversion issue: {e}")
+        # Create proper dates as fallback
+        future_df['date'] = pd.date_range(today + timedelta(days=1), periods=len(future_df), freq="D")
+    
+    # Render the cards
+    for i in range(5):
+        target_date = today + timedelta(days=i + 1)
+        day_abbr = target_date.strftime("%a")
+        date_str = target_date.strftime("%d/%m")
+        
+        # Find matching row - ensure we compare date parts correctly
+        try:
+            matching_rows = future_df[future_df['date'].dt.date == target_date]
+        except Exception:
+            # If date comparison fails, use index-based approach
+            if i < len(future_df):
+                matching_rows = future_df.iloc[[i]]
+            else:
+                matching_rows = pd.DataFrame()
+        
+        with cols[i]:
+            if not matching_rows.empty and len(matching_rows) > 0:
+                row = matching_rows.iloc[0]
+                temp = float(row.get('temp', 27.0))
+                
+                st.markdown(
+                    f"""
+                    <div style="
+                        background:#ffffff;
+                        padding:0.7rem 1.0rem;
+                        border-radius:14px;
+                        color: 1e293b;
+                        width:100%;
+                        display:flex;
+                        justify-content:space-between;
+                        box-shadow: 0 10px 17px rgba(0,0,0,0.1);
+                        align-items:center;
+                    ">
+                        <div style="text-align:left;">
+                            <div style="font-size:1rem; font-weight:600;">{day_abbr}</div>
+                            <div style="font-size:0.9rem; opacity:0.85;">{date_str}</div>
+                        </div>
+                        <div style="text-align:right; font-size:2.2rem; font-weight:600;">
+                            {temp:.0f}°C
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                # Fallback card when no data is available
+                st.markdown(
+                    f"""
+                    <div style="
+                        background:#ffffff;
+                        padding:1.2rem 1.0rem;
+                        border-radius:14px;
+                        color:203a7d;
+                        width:100%;
+                        display:flex;
+                        justify-content:space-between;
+                        align-items:center;
+                    ">
+                        <div style="text-align:left;">
+                            <div style="font-size:1rem; font-weight:600;">{day_abbr}</div>
+                            <div style="font-size:0.9rem; opacity:0.7;">{date_str}</div>
+                        </div>
+                        <div style="text-align:right; font-size:2.5rem; opacity:0.4; font-weight:700;">
+                            -
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+def render_temperature_trend(future_df):
+    """Render temperature trend chart with robust date handling"""
+    try:
+        if future_df is not None and not future_df.empty:
+            # Ensure we have the required columns and proper types
+            if 'date' not in future_df.columns or 'temp' not in future_df.columns:
+                st.info("Incomplete forecast data for trend chart")
+                return
+            
+            # Convert date to datetime if needed
+            future_df = future_df.copy()
+            future_df['date'] = pd.to_datetime(future_df['date'])
+            future_df['temp'] = pd.to_numeric(future_df['temp'], errors='coerce')
+            
+            # Remove any NaN values
+            future_df = future_df.dropna(subset=['date', 'temp'])
+            
+            if future_df.empty:
+                st.info("No valid temperature data available for trend")
+                return
+            
+            # Ensure we have data for the chart
+            if len(future_df) < 2:
+                st.info("Not enough data points for trend chart")
+                return
+            
+            chart_df = future_df.assign(
+                Day=future_df["date"].dt.strftime("%a"),
+                Temperature=future_df["temp"].astype(float)
+            )[["Day", "Temperature"]].head(5)  # Only show next 5 days
+            
+            # Create Plotly figure
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=chart_df["Day"],
+                y=chart_df["Temperature"],
+                mode='lines+markers',
+                line=dict(color="#203a7d", width=3),
+                marker=dict(size=8, color="#203a7d"),
+                hovertemplate='%{y:.1f}°C<extra></extra>'
+            ))
+            
+            # Set fixed Y-axis range
+            fig.update_yaxes(
+                range=[0, 40],
+                dtick=5,
+                title=dict(text="Temperature (°C)", font=dict(color="#000000", size=10)),
+                tickfont=dict(color="#000000"),
+                gridcolor='#e1ebff'
+            )
+            
+            fig.update_xaxes(
+                tickfont=dict(color="#000000"),
+                gridcolor='#79a4cd'
+            )
+            
+            fig.update_layout(
+                title={'text': "", 'x': 0.5, 'xanchor': 'center', 'font': {'size': 5, 'color': '#000000'}},
+                plot_bgcolor='#f7fbff',
+                paper_bgcolor='#f7fbff',
+                font=dict(color='#000000'),
+                margin=dict(l=40, r=20, t=2, b=10),
+                height=130,
+                showlegend=False
+            )
+            
+            # Display the chart
+            st.markdown(
+                """
+                <div style="
+                    background-color: #f9faff;
+                    padding: 0.2rem;         
+                    border-radius: 12px;      
+                    margin: 0.5rem 0;
+                ">
+                """,
+                unsafe_allow_html=True
+            )
+            
+            st.plotly_chart(fig, width ="stretch", config={'displayModeBar': False})
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("Temperature trend data not available")
+    except Exception as e:
+        st.error(f"Error rendering temperature trend: {e}")
+
+def render_fallback_forecast(df, today):
+    """Render fallback forecast when main rendering fails"""
+    st.warning("Displaying simplified forecast due to technical issues")
+    
+    try:
+        # Simple current weather display
+        if 'date' not in df.columns and 'datetime' in df.columns:
+            df['date'] = df['datetime'].dt.date
+            
+        row_today = df[df["date"] == today]
+        if not row_today.empty:
+            r = row_today.iloc[0]
+            st.metric("Current Temperature", f"{r.get('temp', 27):.1f}°C")
+        
+        # Simple forecast
+        st.subheader("Next 5 Days (Estimate)")
+        for i in range(5):
+            target_date = today + timedelta(days=i + 1)
+            st.write(f"{target_date.strftime('%a')}: ~27°C")
+    except Exception as e:
+        st.error(f"Fallback forecast also failed: {e}")
+
+def render_past_weather(df):
+    """Render historical weather data page"""
+    st.markdown("<h1 style='text-align:center;font-size: 2rem;'>HANOI WEATHER HISTORY</h1>", unsafe_allow_html=True)
+    
+    try:
+        # Ensure date column exists
+        if 'date' not in df.columns and 'datetime' in df.columns:
+            df['date'] = df['datetime'].dt.date
+            
+        search_date = st.date_input("Enter date", value=datetime.now().date())
+        row = df[df["date"] == search_date]
+        
+        if not row.empty:
+            st.markdown("### Weather Record:")
+            st.dataframe(row, width="stretch")
+        else:
+            st.warning(f"No data found for {search_date}")
+    except Exception as e:
+        st.error(f"Error loading historical data: {e}")
+
+def render_model_performance():
+    """Render model performance page with metric cards"""
+    st.markdown("<h1 style='text-align:center; font-size: 2rem;'>MODEL PERFORMANCE</h1>", unsafe_allow_html=True)
+    st.markdown("#### Performance Metrics")
+    st.markdown(
+        """
+        <div style="
+            background: #ffffff;
+            padding: 0.5rem 3rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            text-align: left;
+        ">
+            <div style="display: flex; gap: 6rem;">
+                <div style="font-size: 1rem; line-height: 1.4;">
+                    <div>Model:</div>
+                    <div>Input Features: </div>
+                    <div>Training Period: </div>
+                    <div>Prediction Target: </div>
+                </div>
+                <div style="font-size: 1rem; line-height: 1.4;">
+                    <div> <strong>CatBoost</strong></div>
+                    <div> <strong>1200 features</strong></div>
+                    <div> <strong>01/10/2015–01/10/2025</strong></div>
+                    <div><strong>Daily average temperature</strong></div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("#### Performance Metrics")
+    
+    # Define your metrics
+    metrics = [
+        ("R² Score", "0.82"),
+        ("MAE", "1.68°C"),
+        ("RMSE", "2.15°C"),
+        ("Training Period", "9 years")
+    ]
+    
+    # Create 2 columns
+    cols = st.columns(2)
+    
+    for i, (label, value) in enumerate(metrics):
+        with cols[i % 2]:  # Alternate between col0 and col1
+            st.markdown(
+                f"""
+                <div style="
+                    background:#ffffff;
+                    padding:1rem;
+                    margin: 0.5rem;
+                    border-radius:12px;
+                    color:black;
+                    width:100%;
+                    display:flex;
+                    flex-direction:row;
+                    align-items:center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    justify-content:space-between;
+                ">
+                    <div style="text-align:left; font-size:1rem; opacity:0.8;">{label}</div>
+                    <div style="text-align:center; font-size:1.2rem; font-weight:600;">{value}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("#### Feature Importance")
+    st.info("Top 10 features: day_length_hours_lag_21, day_length_hours_lag_30, temp_sealevelpressure_interaction, feelslike, temp, day_avg_feelslike, day_avg_tempmin, rolling_30_sealevelpressure, rolling_3_sealevelpressure_change, season_avg_sealevelpressure")
+
+def render_other_settings():
+    """Render settings page with black text"""
+    # Main heading in black
+    st.markdown("<h1 style='text-align:center; color:#000000;font-size: 2rem;'>OTHER SETTINGS</h1>", unsafe_allow_html=True)
+    
+    # Subheading in black
+    st.markdown("<h4 style='color:#000000;'>Data Management</h4>", unsafe_allow_html=True)
+    
+    if st.button("Update Weather Data Now"):
+        with st.spinner("Updating weather data..."):
+            if safe_data_update():
+                st.success("Update started in background")
+                st.cache_data.clear()
+            else:
+                st.error("Update failed")
+
+    if st.button("Clear Cache"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.success("Cache cleared successfully")
+
+# --------------------------
+# MAIN APPLICATION
+# --------------------------
+def main():
+    """Main application entry point with comprehensive error handling."""
+    try:
+        # Setup page configuration
+        setup_page()
+        
+        # Initialize session state
+        if 'page' not in st.session_state:
+            st.session_state.page = "Forecasting"
+        
+        # Load data with error handling
+        try:
+            with st.spinner("Loading weather data..."):
+                df = load_csv()
+        except Exception as e:
+            st.error(f"Failed to load data: {e}")
+            df = create_fallback_data()
+        
+        # Get current date
+        today = datetime.now().date()
+        
+        # Sidebar
+        with st.sidebar:
+            st.markdown('<div class="sidebar-title">Navigation Menu</div>', unsafe_allow_html=True)
+            
+            pages = {
+                "Forecasting": "Weather Forecast",
+                "Past weather data": "Historical Data", 
+                "Model performance": "Model Info",
+                "Other settings": "Settings"
+            }
+            
+            for page_key, page_label in pages.items():
+                if st.button(page_label, width ="stretch", key=page_key):
+                    st.session_state.page = page_key
+                    st.rerun()
+            
+            st.markdown("---")
+            st.markdown("### Data Status")
+            
+            # Show data freshness
+            try:
+                if not df.empty:
+                    # Ensure we have datetime column for last update
+                    if 'datetime' in df.columns:
+                        last_date = df["datetime"].max()
+                        if hasattr(last_date, 'strftime'):
+                            last_update = last_date.strftime("%b %d, %Y")
+                        else:
+                            last_update = "Unknown"
+                    else:
+                        last_update = "Unknown"
+                        
+                    st.caption(f"Last update: {last_update}")
+                    st.caption(f"Records: {len(df):,}")
+                else:
+                    st.caption("Data status: No data available")
+            except Exception:
+                st.caption("Data status: Unknown")
+        
+        # Page routing with error handling
+        try:
+            if st.session_state.page == "Forecasting":
+                render_forecasting(df, today)
+            elif st.session_state.page == "Past weather data":
+                render_past_weather(df)
+            elif st.session_state.page == "Model performance":
+                render_model_performance()
+            elif st.session_state.page == "Other settings":
+                render_other_settings()
+        except Exception as e:
+            st.error(f"Page rendering error: {e}")
+            import traceback
+            st.error(f"Detailed error: {traceback.format_exc()}")
+            st.info("Please try refreshing the page or selecting a different section.")
+        
+        # Footer
+        st.markdown("---")
+        st.caption("Hanoi Weather Forecast • Data: Visual Crossing Weather API • Built with Streamlit")
+        
+    except Exception as e:
+        st.error(f"Critical application error: {e}")
+        import traceback
+        st.error(f"Full error details: {traceback.format_exc()}")
+        st.info("The application has encountered a critical error. Please refresh the page.")
+
+if __name__ == "__main__":
+    main()
