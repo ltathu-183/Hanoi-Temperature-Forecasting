@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 import streamlit as st
 import pandas as pd
@@ -289,17 +290,17 @@ def setup_page():
     )
     st.markdown("""
     <style>
-    html, body, [class*="css"] {
-        zoom: 0.8 !important;              /* sets global zoom to 80% */
-        transform: scale(0.8);             /* fallback for browsers that ignore zoom */
-        transform-origin: top left;
-    }
     /* MAIN APP - White background */
     .stApp {
         background: #f9faff !important;
         color: #1e293b !important;
+        zoom: 0.8;              /* For Chrome/Edge */
+        transform: scale(0.8);  /* For Firefox and others */
+        transform-origin: top left;
+        width: 125%;
+        height: 125%;
+        overflow: hidden;
     }
-    
     /* REMOVE ALL TOP/BOTTOM PADDING */
     .main .block-container {padding:0rem !important;}
 
@@ -476,12 +477,12 @@ def setup_page():
         min-width: 80px;
         line-height: 1; 
     }
-    
+    }
     
     .metric-value {
         font-size: 0.8rem;
         font-weight: bold;
-        color: #ffffff;
+        color: ffffff;
     }
     
     .metric-label {
