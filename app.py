@@ -294,11 +294,11 @@ def setup_page():
     .stApp {
         background: #f9faff !important;
         color: #1e293b !important;
-        zoom: 0.8;              /* For Chrome/Edge */
-        transform: scale(0.8);  /* For Firefox and others */
+        zoom: 1;              /* For Chrome/Edge */
+        transform: scale(1);  /* For Firefox and others */
         transform-origin: top left;
-        width: 125%;
-        height: 125%;
+        width: 100%;
+        height: 100%;
         overflow: hidden;
     }
     /* REMOVE ALL TOP/BOTTOM PADDING */
