@@ -14,38 +14,7 @@ import traceback
 
 import sys
 from pathlib import Path
-def style_selectboxes():
-    st.markdown("""
-    <style>
-        /* Style the selectbox container */
-        .stSelectbox div[data-baseweb="select"] {
-            background-color: #000000 !important;
-            color: white !important;
-        }
 
-        /* Style the selected option */
-        .stSelectbox div[data-baseweb="select"] span {
-            color: white !important;
-        }
-
-        /* Style the dropdown menu items */
-        .stSelectbox div[data-baseweb="select"] ul {
-            background-color: #000000 !important;
-            color: white !important;
-        }
-
-        /* Style dropdown options on hover */
-        .stSelectbox div[data-baseweb="select"] ul li:hover {
-            background-color: #333333 !important;
-        }
-
-        /* Ensure text remains readable */
-        .stSelectbox div[data-baseweb="select"] input {
-            color: white !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
 project_root = Path(__file__).parent  
 sys.path.append(str(project_root))
 
@@ -331,7 +300,7 @@ def setup_page():
     .stApp {
         background: #f9faff !important;
         color: #1e293b !important;
-        zoom: 0.8;              /* For Chrome/Edge */
+        zoom: 1;              /* For Chrome/Edge */
         transform: scale(0.8);  /* For Firefox and others */
         transform-origin: top left;
         width: 100%;
