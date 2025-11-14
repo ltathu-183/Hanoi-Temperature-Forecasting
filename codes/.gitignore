@@ -1,0 +1,11 @@
+# .gitignore
+.env
+*.env
+.env.local
+.env.production
+*.pyc
+*.pyo
+*.pyd
+.env.venv
+venv/
+ENV/

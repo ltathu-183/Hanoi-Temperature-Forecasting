@@ -95,47 +95,36 @@ PATHS = setup_paths()
 # --------------------------
 # DATA MANAGEMENT
 # --------------------------
-def trigger_prediction_generation(df: pd.DataFrame):
-    """Generate and save multi-horizon predictions after data update"""
-    try:
-        from codes.preprocess_data import predict_future
-        from pathlib import Path
-        
-        # Ensure enough data
-        if len(df) < 60:
-            st.warning("Not enough data to generate predictions")
-            return False
-
-        # Generate predictions (last 60 days as context)
-        predictions = predict_future(df.tail(60))
-        
-        if not isinstance(predictions, pd.DataFrame) or predictions.empty:
-            st.error("Prediction generation returned invalid result")
-            return False
-
-        # Save to file
-        pred_file = PATHS['data_dir'] / "realtime" / "multi_horizon_predictions.csv"
-        pred_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Ensure correct schema
-        if 'y_pred' in predictions.columns and 'date' in predictions.columns:
-            predictions = predictions.rename(columns={'y_pred': 'predicted_temp', 'date': 'target_date'})
-            predictions['as_of_date'] = pd.Timestamp.now().normalize()  # today
-            predictions = predictions[['as_of_date', 'target_date', 'horizon', 'predicted_temp']]
-            
-            # Append or overwrite (you can choose)
-            predictions.to_csv(pred_file, index=False)
-            print("Multi-horizon predictions saved")
-            return True
-        else:
-            st.error("Prediction output missing required columns")
-            return False
-            
-    except Exception as e:
-        st.error(f"Prediction generation failed: {e}")
-        import traceback
-        print(f"Prediction traceback: {traceback.format_exc()}")
+def safe_prediction_update():
+    """Run multi-horizon prediction generation in background"""
+    pred_script = PATHS['project_root'] / "generate_full_multi_horizon_predictions.py"
+    if not pred_script.exists():
+        st.sidebar.warning(f"Prediction script not found: {pred_script}")
         return False
+
+    def pred_thread():
+        try:
+            cmd = [sys.executable, str(pred_script)]
+            result = subprocess.run(
+                cmd,
+                cwd=PATHS['project_root'],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=os.environ
+            )
+            if result.returncode == 0:
+                print("✅ Multi-horizon predictions updated successfully")
+            else:
+                print(f"Prediction update failed: {result.stderr}")
+        except Exception as e:
+            print(f"Prediction thread error: {e}")
+            import traceback
+            print(traceback.format_exc())
+
+    threading.Thread(target=pred_thread, daemon=True).start()
+    st.sidebar.info("Generating multi-horizon predictions...")
+    return True
 def safe_data_update():
     """Run data update in background with comprehensive error handling"""
     if not PATHS['update_script'].exists():
@@ -143,6 +132,7 @@ def safe_data_update():
         return False
     
     def update_thread():
+        
         try:
             # Use the project root as working directory (where the update script expects to run)
             working_dir = PATHS['project_root']
@@ -1278,16 +1268,7 @@ def main():
                         st.sidebar.info(" Data is outdated. Triggering update...")
                         st.cache_data.clear()
                         safe_data_update()
-                        
-                        # Re-load updated data
-                        updated_df = pd.read_csv(PATHS['data_file'], parse_dates=["datetime"])
-                        updated_df = updated_df.sort_values("datetime").reset_index(drop=True)
-                        
-                        # Generate new multi-horizon predictions
-                        if trigger_prediction_generation(updated_df):
-                            st.sidebar.success(" Predictions updated")
-                        else:
-                            st.sidebar.warning(" Prediction generation failed or skipped")
+                        safe_prediction_update() 
                         st.session_state.auto_update_done = True
                 else:
                     st.session_state.auto_update_done = True  # no data → skip
