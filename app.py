@@ -203,9 +203,20 @@ def load_csv() -> pd.DataFrame:
 
 def load_historical_forecasts():
     pred_file = PATHS['data_dir'] / "realtime" / "multi_horizon_predictions.csv"
-    if pred_file.exists():
-        return pd.read_csv(pred_file, parse_dates=["as_of_date", "target_date"])
-    return pd.DataFrame()
+    if not pred_file.exists():
+        return pd.DataFrame()
+
+    try:
+        df = pd.read_csv(pred_file)
+        # Force convert columns to datetime, coerce errors to NaT
+        df['as_of_date'] = pd.to_datetime(df['as_of_date'], errors='coerce')
+        df['target_date'] = pd.to_datetime(df['target_date'], errors='coerce')
+        # Drop rows with invalid dates
+        df = df.dropna(subset=['as_of_date', 'target_date'])
+        return df
+    except Exception as e:
+        st.error(f"Error loading historical forecasts: {e}")
+        return pd.DataFrame()
 
 def create_fallback_data() -> pd.DataFrame:
     """Create synthetic data when real data is unavailable"""
