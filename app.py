@@ -95,6 +95,47 @@ PATHS = setup_paths()
 # --------------------------
 # DATA MANAGEMENT
 # --------------------------
+def trigger_prediction_generation(df: pd.DataFrame):
+    """Generate and save multi-horizon predictions after data update"""
+    try:
+        from codes.preprocess_data import predict_future
+        from pathlib import Path
+        
+        # Ensure enough data
+        if len(df) < 60:
+            st.warning("Not enough data to generate predictions")
+            return False
+
+        # Generate predictions (last 60 days as context)
+        predictions = predict_future(df.tail(60))
+        
+        if not isinstance(predictions, pd.DataFrame) or predictions.empty:
+            st.error("Prediction generation returned invalid result")
+            return False
+
+        # Save to file
+        pred_file = PATHS['data_dir'] / "realtime" / "multi_horizon_predictions.csv"
+        pred_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Ensure correct schema
+        if 'y_pred' in predictions.columns and 'date' in predictions.columns:
+            predictions = predictions.rename(columns={'y_pred': 'predicted_temp', 'date': 'target_date'})
+            predictions['as_of_date'] = pd.Timestamp.now().normalize()  # today
+            predictions = predictions[['as_of_date', 'target_date', 'horizon', 'predicted_temp']]
+            
+            # Append or overwrite (you can choose)
+            predictions.to_csv(pred_file, index=False)
+            print("Multi-horizon predictions saved")
+            return True
+        else:
+            st.error("Prediction output missing required columns")
+            return False
+            
+    except Exception as e:
+        st.error(f"Prediction generation failed: {e}")
+        import traceback
+        print(f"Prediction traceback: {traceback.format_exc()}")
+        return False
 def safe_data_update():
     """Run data update in background with comprehensive error handling"""
     if not PATHS['update_script'].exists():
@@ -342,7 +383,7 @@ def setup_page():
         color: #ffffff !important;             /* White text */
         border-radius: 15px !important;
         padding: 12px 24px !important;
-        font-size: 1.2rem !important;
+        font-size: 0.7rem !important;
         font-weight: 500 !important;
         border: none !important;
         transition: all 0.2s ease !important;
@@ -1146,8 +1187,8 @@ def render_model_performance():
                 f"""
                 <div style="
                     background:#ffffff;
-                    padding:1rem;
-                    margin: 0.5rem;
+                    padding:0.6rem 0.7rem;
+                    margin: 0.3rem 0.5rem;
                     border-radius:12px;
                     color:black;
                     width:100%;
@@ -1165,12 +1206,26 @@ def render_model_performance():
             )
 
     st.markdown("###### Feature Importance")
-    st.info("Top 10 features: day_length_hours_lag_21, day_length_hours_lag_30, temp_sealevelpressure_interaction, feelslike, temp, day_avg_feelslike, day_avg_tempmin, rolling_30_sealevelpressure, rolling_3_sealevelpressure_change, season_avg_sealevelpressure")
+    st.markdown("""
+    <div style="
+        font-size: 0.8rem;
+        background:#dbeafe;
+        color:#0c4a6e;
+        padding:8px 10px;
+        border-left:4px solid #3b82f6;
+        border-radius:5px;
+    ">
+    <b>Top 10 features:</b> day_length_hours_lag_21, day_length_hours_lag_30,
+    temp_sealevelpressure_interaction, feelslike, temp, day_avg_feelslike,
+    day_avg_tempmin, rolling_30_sealevelpressure, rolling_3_sealevelpressure_change,
+    season_avg_sealevelpressure
+    </div>
+    """, unsafe_allow_html=True)
 
 def render_other_settings():
     """Render settings page with black text"""
     # Main heading in black
-    st.markdown("<h1 style='text-align:center; color:#000000;font-size: 2rem;'>OTHER SETTINGS</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center; color:#000000;font-size: 1.5rem;'>OTHER SETTINGS</h1>", unsafe_allow_html=True)
     
     # Subheading in black
     st.markdown("<h4 style='color:#000000;'>Data Management</h4>", unsafe_allow_html=True)
@@ -1211,7 +1266,32 @@ def main():
         
         # Get current date
         today = datetime.now().date()
-        
+
+        # Auto-update
+        if not st.session_state.get('auto_update_done', False):
+            try:
+                if not df.empty and 'datetime' in df.columns:
+                    last_recorded = pd.to_datetime(df['datetime']).dt.date.max()
+                    if today > last_recorded:
+                        st.sidebar.info(" Data is outdated. Triggering update...")
+                        st.cache_data.clear()
+                        safe_data_update()
+                        
+                        # Re-load updated data
+                        updated_df = pd.read_csv(PATHS['data_file'], parse_dates=["datetime"])
+                        updated_df = updated_df.sort_values("datetime").reset_index(drop=True)
+                        
+                        # Generate new multi-horizon predictions
+                        if trigger_prediction_generation(updated_df):
+                            st.sidebar.success(" Predictions updated")
+                        else:
+                            st.sidebar.warning(" Prediction generation failed or skipped")
+                        st.session_state.auto_update_done = True
+                else:
+                    st.session_state.auto_update_done = True  # no data → skip
+            except Exception as e:
+                st.sidebar.error(f"Auto-update failed: {e}")
+                st.session_state.auto_update_done = True
         # Sidebar
         with st.sidebar:
             st.markdown('<div class="sidebar-title">Navigation Menu</div>', unsafe_allow_html=True)
@@ -1229,7 +1309,7 @@ def main():
                     st.rerun()
             
             st.markdown("---")
-            st.markdown("### Data Status")
+            st.markdown("###### Data Status")
             
             # Show data freshness
             try:
