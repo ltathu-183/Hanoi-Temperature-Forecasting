@@ -41,10 +41,11 @@ def get_model_paths():
         print(f"Error getting model paths: {e}")
         return None, None
 
+
 def process_data(df: pd.DataFrame):
-    """Process the weather data for feature engineering - FIXED fragmentation"""
-    # Create a copy to avoid modifying the original
-    df = df.copy()
+    """Process the weather data for feature engineering.
+        return X and y for model training.
+    """
     
     df['datetime'] = pd.to_datetime(df['datetime']) 
     df['year'] = df['datetime'].dt.year
@@ -63,138 +64,104 @@ def process_data(df: pd.DataFrame):
     # Temperature range
     df['temp_range'] = df['tempmax'] - df['tempmin']
 
-    # FIXED: Use df.assign() and avoid inplace operations
-    # Remove unused columns - do this in one operation
-    columns_to_drop = ['name', 'description', 'icon', 'preciptype', 'snow', 
-                      'snowdepth', 'stations', 'severerisk', 'conditions']
-    df = df.drop(columns=columns_to_drop)
+    #Remove unused columns
+    df.drop(columns=['name', 'description', 'icon', 'preciptype', 'snow', 'snowdepth', 'stations', 'severerisk', 'conditions'], inplace=True)
 
-    df = df.set_index('datetime')
+    df.set_index('datetime', inplace=True)
     df.index = pd.to_datetime(df.index)
     df['sunrise'] = pd.to_datetime(df['sunrise'])
     df['sunset'] = pd.to_datetime(df['sunset'])
-    df['day_length_hours'] = (df['sunset'] - df['sunrise']).dt.total_seconds() / 3600.0
+    df['day_length_hours'] = df['sunset'] - df['sunrise']
     df = df.drop(columns=['sunrise', 'sunset'])
+    df['day_length_hours'] = df['day_length_hours'].dt.total_seconds() / 3600.0
 
-    # Cyclical features
     df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
     df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
     df['dayofyear_sin'] = np.sin(2 * np.pi * df['day_of_year'] / 365)
     df['dayofyear_cos'] = np.cos(2 * np.pi * df['day_of_year'] / 365)
 
-    # Drop multiple columns at once
-    df = df.drop(columns=['day', 'month', 'day_of_year'])
+    df.drop(columns=['day', 'month', 'day_of_year'], inplace=True)
 
-    # Interaction features - build a dictionary first, then assign all at once
-    interaction_features = {
-        "temp_solar_interaction": df["temp"] * df["solarradiation"],
-        "uv_temp_interaction": df["uvindex"] * df["temp"],
-        'temp_cloudcover_interaction': df['temp'] * df['cloudcover'],
-        'temp_sealevelpressure_interaction': df['temp'] * df['sealevelpressure'],
-        'weighted_precip': df['precipprob'] * df['precip'],
-        'effective_solar': df['solarradiation'] * (1 - df['cloudcover']/100),
-        'precip_impact': df['precipprob'] * df['precip']
-    }
-    
-    # Add all interaction features at once
-    df = df.assign(**interaction_features)
+    df["temp_solar_interaction"] = df["temp"] * df["solarradiation"]
+    df["uv_temp_interaction"] = df["uvindex"] * df["temp"]
+    df['temp_cloudcover_interaction'] = df['temp'] * df['cloudcover']
+    df['temp_sealevelpressure_interaction'] = df['temp'] * df['sealevelpressure']
+    df['weighted_precip'] = df['precipprob'] * df['precip']
+    df['effective_solar'] = df['solarradiation'] * (1 - df['cloudcover']/100)
+    df['precip_impact'] = df['precipprob'] * df['precip']
 
-    # Wind features
-    df['wind_u'] = df['windspeed'] * np.cos(2 * np.pi * df['winddir'] / 360)
-    df['wind_v'] = df['windspeed'] * np.sin(2 * np.pi * df['winddir'] / 360)
+    df['wind_u'] = df['windspeed'] * np.cos(2 * np.pi * df['winddir'] / 360)  # gió đông-tây
+    df['wind_v'] = df['windspeed'] * np.sin(2 * np.pi * df['winddir'] / 360)  # gió nam-bắc
     df = df.drop('winddir', axis=1)
 
     temp_minus_dew = df['temp'] - df['dew']
 
-    # Moonphase features
+    # Create feature moonphase_sin
     df['moonphase_sin'] = np.sin(2 * np.pi * df['moonphase'] / 1)
+
+    # Create feature moonphase_cos
     df['moonphase_cos'] = np.cos(2 * np.pi * df['moonphase'] / 1)
+
+    # Remove original moonphase
     df = df.drop('moonphase', axis=1)
 
-    # FIXED: Create lag features without fragmentation
+    # Create lagging features
     def create_lag_features(df, cols, lags):
-        """Create lag features without DataFrame fragmentation"""
-        lag_data = {}
         for col in cols:
             for lag in lags:
-                lag_data[f"{col}_lag_{lag}"] = df[col].shift(lag)
-        
-        # Add all lag features at once
-        return df.assign(**lag_data)
+                df[f"{col}_lag_{lag}"] = df[col].shift(lag)
+        return df
 
     # Specify columns and lags
+    # Get all numerical columns
     computing_columns = df.drop(columns=['year', 'season', 'month_sin',
                                         'month_cos', 'dayofyear_sin', 'dayofyear_cos']).columns
 
-    lag_steps = [1, 2, 3, 5, 7, 10, 14, 21, 30]
+    lag_steps = [1, 2, 3, 5, 7, 10, 14, 21, 30]  # Example lag steps
 
-    # Apply lagging features
+    # Apply lagging features before handling rolling horizons
     df = create_lag_features(df, computing_columns, lag_steps)
 
-    # FIXED: Rolling features without fragmentation
-    def compute_rolling_all(df, horizons, cols):
-        """Compute all rolling features at once to avoid fragmentation"""
-        rolling_data = {}
-        
-        for horizon in horizons:
-            for col in cols:
-                rolling_mean = df[col].rolling(horizon, min_periods=horizon).mean()
-                label = f"rolling_{horizon}_{col}"
-                rolling_data[label] = rolling_mean
-                rolling_data[f"{label}_change"] = df[col] - rolling_mean
-        
-        return df.assign(**rolling_data)
+    # Function to compute rolling mean and percentage change
+    def compute_rolling(df, horizon, col):
+        label = f"rolling_{horizon}_{col}"
+        df[label] = df[col].rolling(horizon, min_periods=horizon).mean()  # Ensure full horizon is used
+        df[f"{label}_change"] = df[col] - df[label]
+        return df
 
     # Compute rolling features for specified horizons
-    rolling_horizons = [3, 7, 14, 21, 30]
-    df = compute_rolling_all(df, rolling_horizons, computing_columns)
-    
-    # FIXED: Expanding mean features without fragmentation
-    def add_expanding_features(df, computing_columns):
-        """Add all expanding mean features at once"""
-        expanding_data = {}
-        
+    rolling_horizons = [3, 7, 14, 21, 30]  # Rolling windows of 3, 7, 14 days
+    for horizon in rolling_horizons:
         for col in computing_columns:
-            expanding_data[f"month_avg_{col}"] = df[col].groupby(df.index.month, group_keys=False).apply(lambda x: x.expanding(1).mean())
-            expanding_data[f"day_avg_{col}"] = df[col].groupby(df.index.day_of_year, group_keys=False).apply(lambda x: x.expanding(1).mean())
-            expanding_data[f"year_avg_{col}"] = df[col].groupby(df.index.year, group_keys=False).apply(lambda x: x.expanding(1).mean())
-            expanding_data[f"season_avg_{col}"] = df[col].groupby(df['season'], group_keys=False).apply(lambda x: x.expanding(1).mean())
-        
-        # Add temperature min/max features
-        expanding_data["month_max_temp"] = df['temp'].groupby(df.index.month, group_keys=False).cummax()
-        expanding_data["month_min_temp"] = df['temp'].groupby(df.index.month, group_keys=False).cummin()
-        
-        return df.assign(**expanding_data)
-
-    df = add_expanding_features(df, computing_columns)
-
-    # FIXED: Volatility and anomaly features without fragmentation
-    volatility_data = {
-        "temp_volatility_7": df["temp"].rolling(7).std(),
-        "temp_volatility_14": df["temp"].rolling(14).std(),
-        "temp_volatility_21": df["temp"].rolling(21).std(),
-        "temp_volatility_30": df["temp"].rolling(30).std(),
-        "temp_spike_flag": (df["temp"] - df["temp"].shift(1)).abs() > 5,
-        "temp_anomaly_vs_month_avg": df["temp"] - df["month_avg_temp"],
-        "temp_anomaly_vs_season_avg": df["temp"] - df["season_avg_temp"]
-    }
+            df = compute_rolling(df, horizon, col)
     
-    df = df.assign(**volatility_data)
+    #Months and days average
+    def expand_mean(df):
+        return df.expanding(1).mean()
 
-    # FIXED: Pressure trend features
-    pressure_data = {
-        "pressure_trend_3d": df["sealevelpressure"] - df["sealevelpressure"].shift(3),
-        "pressure_trend_7d": df["sealevelpressure"] - df["sealevelpressure"].shift(7),
-        "pressure_trend_14d": df["sealevelpressure"] - df["sealevelpressure"].shift(14),
-        "pressure_trend_21d": df["sealevelpressure"] - df["sealevelpressure"].shift(21),
-        "pressure_trend_30d": df["sealevelpressure"] - df["sealevelpressure"].shift(30)
-    }
-    
-    df = df.assign(**pressure_data)
+    for col in computing_columns:
+        df[f"month_avg_{col}"] = df[col].groupby(df.index.month, group_keys=False).apply(expand_mean)
+        df[f"day_avg_{col}"] = df[col].groupby(df.index.day_of_year, group_keys=False).apply(expand_mean)
+        df[f"year_avg_{col}"] = df[col].groupby(df.index.year, group_keys=False).apply(expand_mean)
+        df[f"season_avg_{col}"] = df[col].groupby(df['season'], group_keys=False).apply(expand_mean)
+        df["month_max_temp"] = df['temp'].groupby(df.index.month, group_keys=False).cummax()
+        df["month_min_temp"] = df['temp'].groupby(df.index.month, group_keys=False).cummin()
+
+    df["temp_volatility_7"] = df["temp"].rolling(7).std()
+    df["temp_volatility_14"] = df["temp"].rolling(14).std()
+    df["temp_volatility_21"] = df["temp"].rolling(21).std()
+    df["temp_volatility_30"] = df["temp"].rolling(30).std()
+    df["temp_spike_flag"] = (df["temp"] - df["temp"].shift(1)).abs() > 5
+    df["temp_anomaly_vs_month_avg"] = df["temp"] - df["month_avg_temp"]
+    df["temp_anomaly_vs_season_avg"] = df["temp"] - df["season_avg_temp"]
+
+    df["pressure_trend_3d"] = df["sealevelpressure"] - df["sealevelpressure"].shift(3)
+    df["pressure_trend_7d"] = df["sealevelpressure"] - df["sealevelpressure"].shift(30)
     df = df.iloc[30:]
 
-    # Return a defragmented copy
-    return df.copy()
+    X = df
+
+    return X
 
 def select_top_k(X, k=93):
     """Select top K features with error handling"""
@@ -255,7 +222,7 @@ def build_preprocessing_pipeline_catboost(X):
 
 def predict_future(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
-    Predict future temperatures with comprehensive error handling - FIXED fragmentation
+    Predict future temperatures with comprehensive error handling - NO FRAGMENTATION
     """
     checking_columns = ['name', 'datetime', 'tempmax', 'tempmin', 'temp', 'feelslikemax',
        'feelslikemin', 'feelslike', 'dew', 'humidity', 'precip', 'precipprob',

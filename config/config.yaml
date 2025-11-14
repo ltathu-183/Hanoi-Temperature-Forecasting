@@ -18,11 +18,16 @@ data:
     timeout: 30  # seconds
   
   # Data paths
-  paths:
-    raw_daily: "data/raw/daily/"
-    raw_hourly: "data/raw/hourly/"
-    processed_daily: "data/processed/daily/"
-    processed_hourly: "data/processed/hourly/"
+paths:
+  data_dir: "data"
+  model_dir: "models"
+  codes_dir: "codes"
+  realtime_data: "data/realtime/hanoi_weather_complete.csv"
+  historical_predictions: "data/realtime/multi_horizon_predictions.csv" 
+  update_script: "codes/update_weather_data.py"
+  model_file: "models/daily/BEST_CATBOOST_TIMESERIES.joblib"
+  selection_file: "models/daily/selection_result.joblib"
+
 
 # Feature Engineering
 features:

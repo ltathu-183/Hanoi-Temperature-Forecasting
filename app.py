@@ -14,7 +14,38 @@ import traceback
 
 import sys
 from pathlib import Path
+def style_selectboxes():
+    st.markdown("""
+    <style>
+        /* Style the selectbox container */
+        .stSelectbox div[data-baseweb="select"] {
+            background-color: #000000 !important;
+            color: white !important;
+        }
 
+        /* Style the selected option */
+        .stSelectbox div[data-baseweb="select"] span {
+            color: white !important;
+        }
+
+        /* Style the dropdown menu items */
+        .stSelectbox div[data-baseweb="select"] ul {
+            background-color: #000000 !important;
+            color: white !important;
+        }
+
+        /* Style dropdown options on hover */
+        .stSelectbox div[data-baseweb="select"] ul li:hover {
+            background-color: #333333 !important;
+        }
+
+        /* Ensure text remains readable */
+        .stSelectbox div[data-baseweb="select"] input {
+            color: white !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
 project_root = Path(__file__).parent  
 sys.path.append(str(project_root))
 
@@ -138,6 +169,12 @@ def load_csv() -> pd.DataFrame:
     except Exception as e:
         st.error(f"Data loading failed: {e}")
         return create_fallback_data()
+
+def load_historical_forecasts():
+    pred_file = PATHS['data_dir'] / "realtime" / "multi_horizon_predictions.csv"
+    if pred_file.exists():
+        return pd.read_csv(pred_file, parse_dates=["as_of_date", "target_date"])
+    return pd.DataFrame()
 
 def create_fallback_data() -> pd.DataFrame:
     """Create synthetic data when real data is unavailable"""
@@ -301,6 +338,26 @@ def setup_page():
         height: 100%;
         overflow: hidden;
     }
+    .stButton>button {
+        background-color: #575ea5 !important;  /* Purple background */
+        color: #ffffff !important;             /* White text */
+        border-radius: 15px !important;
+        padding: 12px 24px !important;
+        font-size: 1.2rem !important;
+        font-weight: 500 !important;
+        border: none !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .stButton>button:hover {
+        background-color: #79a8e7 !important;
+        color: #182850 !important;
+        transform: translateY(-2px);
+    }
+
+    .stButton>button:active {
+        transform: translateY(1px);
+    }
     /* REMOVE ALL TOP/BOTTOM PADDING */
     .main .block-container {padding:0rem !important;}
 
@@ -324,10 +381,9 @@ def setup_page():
     .temperature-trend-container div[data-testid="stChart"] {
         background-color: #ffffff !important;
     }
-    .stButton > button {
+    section[data-testid="stSidebar"] .stButton > button {
         background-color: #ffffff !important;     /* White background */
         color: #000000 !important;                /* Black text */
-        border: 1px solid #cccccc !important;     /* Light gray border */
         border-radius: 8px !important;
         padding: 10px 16px !important;
         font-size: 1rem !important;
@@ -554,7 +610,10 @@ def render_forecasting(df, today):
         render_forecast_cards(df, today, future_df)
         
         # Display temperature trend
-        render_temperature_trend(future_df)
+        historical_pred_df = load_historical_forecasts()  # your existing loader
+
+        # Render the unified chart
+        render_forecast_comparison(df, historical_pred_df, today)
         
     except Exception as e:
         st.error(f"Forecast rendering error: {e}")
@@ -730,91 +789,115 @@ def render_forecast_cards(df, today, future_df):
                     unsafe_allow_html=True,
                 )
 
-def render_temperature_trend(future_df):
-    """Render temperature trend chart with robust date handling"""
+def render_forecast_comparison(df, historical_pred_df, today):
+    """
+    Show actual temps + 5 horizon lines (1-day to 5-day forecasts)
+    from historical predictions (dates ≤ today).
+    """
     try:
-        if future_df is not None and not future_df.empty:
-            # Ensure we have the required columns and proper types
-            if 'date' not in future_df.columns or 'temp' not in future_df.columns:
-                st.info("Incomplete forecast data for trend chart")
-                return
-            
-            # Convert date to datetime if needed
-            future_df = future_df.copy()
-            future_df['date'] = pd.to_datetime(future_df['date'])
-            future_df['temp'] = pd.to_numeric(future_df['temp'], errors='coerce')
-            
-            # Remove any NaN values
-            future_df = future_df.dropna(subset=['date', 'temp'])
-            
-            if future_df.empty:
-                st.info("No valid temperature data available for trend")
-                return
-            
-            # Ensure we have data for the chart
-            if len(future_df) < 2:
-                st.info("Not enough data points for trend chart")
-                return
-            
-            chart_df = future_df.assign(
-                Day=future_df["date"].dt.strftime("%a"),
-                Temperature=future_df["temp"].astype(float)
-            )[["Day", "Temperature"]].head(5)  # Only show next 5 days
-            
-            # Create Plotly figure
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=chart_df["Day"],
-                y=chart_df["Temperature"],
-                mode='lines+markers',
-                line=dict(color="#203a7d", width=3),
-                marker=dict(size=8, color="#203a7d"),
-                hovertemplate='%{y:.1f}°C<extra></extra>'
-            ))
-            
-            # Set fixed Y-axis range
-            fig.update_yaxes(
-                range=[0, 40],
-                dtick=5,
-                title=dict(text="Temperature (°C)", font=dict(color="#000000", size=10)),
-                tickfont=dict(color="#000000"),
-                gridcolor='#e1ebff'
-            )
-            
-            fig.update_xaxes(
-                tickfont=dict(color="#000000"),
-                gridcolor='#79a4cd'
-            )
-            
-            fig.update_layout(
-                title={'text': "", 'x': 0.5, 'xanchor': 'center', 'font': {'size': 5, 'color': '#000000'}},
-                plot_bgcolor='#f7fbff',
-                paper_bgcolor='#f7fbff',
-                font=dict(color='#000000'),
-                margin=dict(l=40, r=20, t=2, b=10),
-                height=130,
-                showlegend=False
-            )
-            
-            # Display the chart
-            st.markdown(
-                """
-                <div style="
-                    background-color: #f9faff;
-                    padding: 0.2rem;         
-                    border-radius: 12px;      
-                    margin: 0.5rem 0;
-                ">
-                """,
-                unsafe_allow_html=True
-            )
-            
-            st.plotly_chart(fig, width ="stretch", config={'displayModeBar': False})
-            st.markdown("</div>", unsafe_allow_html=True)
-        else:
-            st.info("Temperature trend data not available")
+        st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)  # space before chart
+        today_ts = pd.Timestamp(today)
+
+        # --- Actual temperatures ---
+        actual = df[['datetime', 'temp']].copy()
+        actual['datetime'] = pd.to_datetime(actual['datetime'])
+        actual = actual.set_index('datetime').sort_index()
+        start_date = historical_pred_df["target_date"].min()
+        actual = actual[(actual.index <= today_ts) & (actual.index >= start_date)]
+
+        # --- Initialize Plotly figure ---
+        fig = go.Figure()
+
+        # >>> ACTUAL LINE (SOLID) <<<
+        fig.add_trace(go.Scatter(
+            x=actual.index,
+            y=actual['temp'],
+            mode='lines',
+            name='Actual',
+            line=dict(color="#3a0eca", width=2.5)  # Dark gray/black
+        ))
+
+        # --- 5 HORIZON LINES (DOTTED) ---
+        if not historical_pred_df.empty:
+            past_pred = historical_pred_df[
+                historical_pred_df['as_of_date'] <= today_ts
+            ].copy()
+
+            if not past_pred.empty:
+                past_pred = past_pred.sort_values('as_of_date')
+                # Color palette: red → blue (1-day to 5-day)
+                colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6']
+                
+                for horizon in [1, 2, 3, 4, 5]:
+                    h_data = past_pred[past_pred['horizon'] == horizon]
+                    if not h_data.empty:
+                        # Get most recent prediction for each target_date
+                        h_series = h_data.groupby('target_date')['predicted_temp'].last()
+                        
+                        fig.add_trace(go.Scatter(
+                            x=h_series.index,
+                            y=h_series.values,
+                            mode='lines',
+                            name=f'{horizon}-Day Forecast',
+                            line=dict(color=colors[horizon-1], width=1.4, dash='dot')
+                        ))
+        # --- Add TODAY vertical line ---
+        fig.add_vline(
+            x=today_ts,
+            line_width=1.4,
+            line_dash="dash",
+            line_color="red"
+        )
+        fig.add_annotation(
+            x=today_ts,
+            y=actual['temp'].max(),
+            text="Today",
+            showarrow=False,
+            font=dict(color="black", size=10),
+            yshift=10
+        )
+
+        # --- Layout ---
+        fig.update_layout(
+            title=None,  # REMOVE TITLE
+            xaxis=dict(
+                title=dict(
+                    text="Date",
+                    font=dict(color="black", size=12)  # <-- correct way
+                ),
+                tickfont=dict(color="black"),
+                gridcolor='#e2e8f0'
+            ),
+            yaxis=dict(
+                title=dict(
+                    text="Temperature (°C)",
+                    font=dict(color="black", size=12)  # <-- correct
+                ),
+                tickfont=dict(color="black"),
+                gridcolor='#e2e8f0',
+                range=[0, actual['temp'].max() + 2] 
+            ),
+            plot_bgcolor='white',     # INSIDE background
+            paper_bgcolor='white',    # OUTSIDE background
+            height=200,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                font=dict(color="black", size=12)
+            ),
+            margin = dict(t=0, b=0, l=5, r=5)
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
     except Exception as e:
-        st.error(f"Error rendering temperature trend: {e}")
+        st.error(f"Chart error: {e}")
+        import traceback
+        st.text(traceback.format_exc())
+
 
 def render_fallback_forecast(df, today):
     """Render fallback forecast when main rendering fails"""
@@ -839,25 +922,178 @@ def render_fallback_forecast(df, today):
         st.error(f"Fallback forecast also failed: {e}")
 
 def render_past_weather(df):
-    """Render historical weather data page"""
     st.markdown("<h1 style='text-align:center;font-size: 2rem;'>HANOI WEATHER HISTORY</h1>", unsafe_allow_html=True)
-    
-    try:
-        # Ensure date column exists
-        if 'date' not in df.columns and 'datetime' in df.columns:
-            df['date'] = df['datetime'].dt.date
-            
-        search_date = st.date_input("Enter date", value=datetime.now().date())
-        row = df[df["date"] == search_date]
-        
+
+    # Ensure 'date' column exists and is of type date
+    if 'date' not in df.columns:
+        if 'datetime' in df.columns:
+            df = df.copy()
+            df['date'] = pd.to_datetime(df['datetime']).dt.date
+        else:
+            st.error("DataFrame must contain a 'date' or 'datetime' column.")
+            return
+    else:
+        df = df.copy()
+        df['date'] = pd.to_datetime(df['date']).dt.date
+
+    min_date = df['date'].min()
+    max_date = min(df['date'].max(), datetime.now().date())
+
+    # === Mode Selection (Styled to appear on dark background) ===
+    # Optional: wrap in a dark-background container for visual emphasis
+    st.markdown('<span style="background-color:#ffffff; color:black;">Select mode</span>', unsafe_allow_html=True)
+    mode = st.selectbox(
+        "Select mode",  # accessibility fallback
+        options=["Single Date", "Date Range"],
+        index=0,
+        key="mode_select",
+        label_visibility="collapsed"
+    )
+   
+    if mode == "Single Date":
+        search_date = st.date_input(
+            "Select a date",
+            value=max_date,
+            min_value=min_date,
+            max_value=max_date,
+            key="single_date"
+        )
+        # Auto-update without button
+        row = df[df['date'] == search_date]
         if not row.empty:
-            st.markdown("### Weather Record:")
-            st.dataframe(row, width="stretch")
+            st.markdown(f"### Weather on {search_date.strftime('%b %d, %Y')}")
+            st.dataframe(row, use_container_width=True)
         else:
             st.warning(f"No data found for {search_date}")
-    except Exception as e:
-        st.error(f"Error loading historical data: {e}")
 
+    elif mode == "Date Range":
+    # Top row: Start, End, View Mode
+        col1, col2, col3 = st.columns([2, 2, 2])
+        with col1:
+            start_date = st.date_input(
+                "Start date",
+                value=max_date - timedelta(days=6),
+                min_value=min_date,
+                max_value=max_date,
+                key="start_date"
+            )
+        with col2:
+            end_date = st.date_input(
+                "End date",
+                value=max_date,
+                min_value=min_date,
+                max_value=max_date,
+                key="end_date"
+            )
+        with col3:
+            view_mode = st.selectbox(
+                "View",
+                options=["Single Feature", "All Features"],
+                index=0,
+                key="view_mode"
+            )
+
+        if start_date > end_date:
+            st.warning("Start date cannot be after end date.")
+            st.stop()
+
+        mask = (df['date'] >= start_date) & (df['date'] <= end_date)
+        range_df = df.loc[mask].copy()
+
+        if range_df.empty:
+            st.warning(f"No data found between {start_date} and {end_date}.")
+            st.stop()
+
+        # Shared setup
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        preferred_order = ['temp', 'tempmax', 'tempmin', 'humidity', 'precip', 'windspeed', 'windgust', 'pressure', 'uvindex']
+        numeric_cols_sorted = sorted(
+            numeric_cols,
+            key=lambda x: (preferred_order.index(x) if x in preferred_order else 999, x)
+        )
+        unit_map = {
+            'temp': '°C', 'tempmax': '°C', 'tempmin': '°C',
+            'humidity': '%', 'precip': 'mm', 'windspeed': 'km/h',
+            'windgust': 'km/h', 'pressure': 'hPa', 'uvindex': ''
+        }
+
+        # Helper: render one feature
+        def render_feature(feature):
+            feature_series = pd.to_numeric(range_df[feature], errors='coerce').dropna()
+            if feature_series.empty:
+                return False
+
+            stats = {
+                'Min': feature_series.min(),
+                'Max': feature_series.max(),
+                'Mean': feature_series.mean(),
+                'Std Dev': feature_series.std(),
+                'Count': int(feature_series.count())
+            }
+            unit = unit_map.get(feature, "")
+
+            chart_df = range_df[['date', feature]].dropna().sort_values('date')
+            chart_df['date_str'] = chart_df['date'].apply(lambda d: d.strftime('%b %d'))
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=chart_df['date_str'],
+                y=chart_df[feature],
+                mode='lines+markers',
+                line=dict(color="#2a12a3", width=2.2),
+                marker=dict(size=5),
+                hovertemplate=f'%{{x}}<br>%{{y:.1f}}{unit}<extra></extra>'
+            ))
+            fig.update_layout(
+                title=f"{feature.replace('_',' ').title()} ({unit})",
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                margin=dict(l=10, r=10, t=40, b=20),
+                height=300,
+                xaxis=dict(gridcolor='#e2e8f0', tickfont=dict(size=10, color="black")),
+                yaxis=dict(title=unit, gridcolor='#e2e8f0', tickfont=dict(size=10, color="black")),
+                showlegend=False
+            )
+
+            chart_col, stats_col = st.columns([3, 1])
+            with chart_col:
+                st.plotly_chart(fig, use_container_width=True)
+            with stats_col:
+                st.markdown("### Summary")
+                for label, value in stats.items():
+                    if pd.isna(value):
+                        display_val = "N/A"
+                    elif label == 'Count':
+                        display_val = str(int(value))
+                    else:
+                        display_val = f"{value:.1f}{unit}"
+                    color = '#ef4444' if label == 'Max' else '#3b82f6' if label == 'Min' else '#203a7d'
+                    st.markdown(f"**{label}:** <span style='color:{color}'>{display_val}</span>", unsafe_allow_html=True)
+            return True
+
+        if view_mode == "Single Feature":
+            # Show feature selector below the top row
+            selected_feature = st.selectbox(
+                "Feature to analyze",
+                options=numeric_cols_sorted,
+                index=numeric_cols_sorted.index('temp') if 'temp' in numeric_cols_sorted else 0,
+                key="feature_select_single"
+            )
+            render_feature(selected_feature)
+            with st.expander("View Raw Data", expanded=False):
+                display_df = range_df.copy()
+                display_df['date'] = display_df['date'].apply(lambda d: d.strftime('%Y-%m-%d'))
+                cols_to_show = ['date', selected_feature]
+                if 'conditions' in display_df.columns:
+                    cols_to_show.append('conditions')
+                st.dataframe(display_df[cols_to_show].sort_values('date', ascending=False), use_container_width=True)
+        else:  # "All Features"
+            st.markdown("### All Features")
+            with st.expander("View Full Data (All Columns)", expanded=False):
+                display_df = range_df.copy()
+                display_df['date'] = display_df['date'].apply(lambda d: d.strftime('%Y-%m-%d'))
+                display_df = display_df.sort_values('date', ascending=False)
+                st.dataframe(display_df, use_container_width=True)
 def render_model_performance():
     """Render model performance page with metric cards"""
     st.markdown("<h1 style='text-align:center; font-size: 2rem;'>MODEL PERFORMANCE</h1>", unsafe_allow_html=True)
