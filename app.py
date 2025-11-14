@@ -14,7 +14,38 @@ import traceback
 
 import sys
 from pathlib import Path
+def style_selectboxes():
+    st.markdown("""
+    <style>
+        /* Style the selectbox container */
+        .stSelectbox div[data-baseweb="select"] {
+            background-color: #000000 !important;
+            color: white !important;
+        }
 
+        /* Style the selected option */
+        .stSelectbox div[data-baseweb="select"] span {
+            color: white !important;
+        }
+
+        /* Style the dropdown menu items */
+        .stSelectbox div[data-baseweb="select"] ul {
+            background-color: #000000 !important;
+            color: white !important;
+        }
+
+        /* Style dropdown options on hover */
+        .stSelectbox div[data-baseweb="select"] ul li:hover {
+            background-color: #333333 !important;
+        }
+
+        /* Ensure text remains readable */
+        .stSelectbox div[data-baseweb="select"] input {
+            color: white !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
 project_root = Path(__file__).parent  
 sys.path.append(str(project_root))
 
@@ -300,6 +331,10 @@ def setup_page():
     .stApp {
         background: #f9faff !important;
         color: #1e293b !important;
+        zoom: 1;              /* For Chrome/Edge */
+        transform: scale(1);  /* For Firefox and others */
+        width: 100%;
+        height: 100%;
         overflow: hidden;
     }
     .stButton>button {
@@ -361,8 +396,8 @@ def setup_page():
     /* WIDER SIDEBAR */
     section[data-testid="stSidebar"] {
         background: #2e3190  !important;
-        min-width: 410px !important;
-        max-width: 600px !important;
+        min-width: 280 !important;
+        max-width: 300px !important;
     }
     
     /* SIDEBAR */
@@ -370,7 +405,7 @@ def setup_page():
         color: #ffffff !important;
     }
     .sidebar-title {
-        font-size: 1.5rem !important;
+        font-size: 1rem !important;
         font-weight: 600 !important;
         color: white !important;
         margin-bottom: 1rem !important;
@@ -382,7 +417,7 @@ def setup_page():
         width: 90%;
         padding: 12px;
         margin: 3px 0;
-        font-size: 2rem;
+        font-size: 0.5rem;
         font-weight: 500;
         border: 0px;
         transition: all 0.2s;
@@ -405,7 +440,7 @@ def setup_page():
         margin-top: 0rem !important;
         margin-bottom: 0rem !important;
         padding: 0rem 0rem !important;       
-        font-size: 1.9rem !important;
+        font-size: 1rem !important;
         font-weight: 600 !important;
     }
     
@@ -415,7 +450,7 @@ def setup_page():
         margin-top: 0rem !important;
         margin-bottom: 0rem !important;
         padding: 0.2rem 0rem !important;
-        font-size: 1rem !important;
+        font-size: 0.8rem !important;
         font-weight: 400 !important;
     }
 
@@ -432,14 +467,14 @@ def setup_page():
         display: flex;
         flex-direction: column;
         align-items: center; 
-        height: 32vh;
+        height: 28vh;
     }
 
     .current-weather-heading {
         text-align: right;
         color: white;
         margin: 0 0 0.2rem 0;
-        font-size: 0.4rem;
+        font-size: 0.8rem;
         font-weight: 550;
         padding: 0;
     }
@@ -447,7 +482,7 @@ def setup_page():
     .weather-header {
         display: flex;
         align-items: center; /* Keep everything vertically centered */
-        gap: 1rem; /* Reduced from 2rem/3rem to tighten space */
+        gap: 0.3rem; /* Reduced from 2rem/3rem to tighten space */
         margin-top: 0rem;
         margin-bottom: 0rem;
         padding: 0rem 0rem;
@@ -463,23 +498,23 @@ def setup_page():
     }
     
     .weather-icon {
-        font-size: 4.2rem !important;
+        font-size: 3.2rem !important;
     }
     
     .weather-temp {
-        font-size: 2.5rem !important;
+        font-size: 1.6rem !important;
         font-weight: bold !important;
         color: #ffffff !important;
     }
     
     .weather-condition {
         text-align: left;
-        font-size: 1rem !important;
+        font-size: 0.7rem !important;
         color: #ffffff !important;
     }
     
     .weather-minmax {
-        font-size: 1rem !important;
+        font-size: 0.7rem !important;
         color: #ffffff !important;
         text-align: right;
     }
@@ -489,7 +524,7 @@ def setup_page():
         display: flex;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 10rem;
+        gap: 4rem;
     }
     
     .weather-metric-item {
@@ -500,13 +535,13 @@ def setup_page():
     }
     
     .metric-value {
-        font-size: 0.8rem;
+        font-size: 0.4rem;
         font-weight: bold;
         color: ffffff;
     }
     
     .metric-label {
-        font-size: 0.7rem;
+        font-size: 0.5rem;
         color: #ffffff;
         margin-top: 0.25rem;
     }
@@ -537,7 +572,7 @@ def setup_page():
     }
     
     .forecast-card .temp {
-        font-size: 1.2rem !important;
+        font-size: 1rem !important;
         font-weight: bold !important;
         padding = 0rem !important;
     }
@@ -614,7 +649,7 @@ def render_current_weather(df, today):
             st.markdown(
                 f"""
                 <div class="current-weather-full-container">
-                    <h3 class="current-weather-heading" margin-top:0rem; font-size:1.5rem; color: #ffffff; text-align: right;'>Current Weather</h3>
+                    <div class="current-weather-heading" margin-top:0rem; font-size:1rem; color: #ffffff; text-align: right;'>Current Weather</div>
                     <div class="weather-header">
                         <div class="weather-icon-temp">
                             <div class="weather-icon">{icon}</div>
@@ -658,7 +693,7 @@ def render_current_weather(df, today):
 
 def render_forecast_cards(df, today, future_df):
     """Render forecast cards with better error handling."""
-    st.markdown("<h3 style='text-align:left; margin-top:0rem; font-size:1.5rem;'>Next 5 Days Temperature Forecast</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:left; margin-top:0rem; font-size:1rem;'>Next 5 Days Temperature Forecast</h3>", unsafe_allow_html=True)
     
     cols = st.columns(5)
     
@@ -717,10 +752,10 @@ def render_forecast_cards(df, today, future_df):
                         align-items:center;
                     ">
                         <div style="text-align:left;">
-                            <div style="font-size:1rem; font-weight:600;">{day_abbr}</div>
-                            <div style="font-size:0.9rem; opacity:0.85;">{date_str}</div>
+                            <div style="font-size:0.5rem; font-weight:600;">{day_abbr}</div>
+                            <div style="font-size:0.4rem; opacity:0.85;">{date_str}</div>
                         </div>
-                        <div style="text-align:right; font-size:2.2rem; font-weight:600;">
+                        <div style="text-align:right; font-size:0.6rem; font-weight:600;">
                             {temp:.0f}°C
                         </div>
                     </div>
@@ -742,10 +777,10 @@ def render_forecast_cards(df, today, future_df):
                         align-items:center;
                     ">
                         <div style="text-align:left;">
-                            <div style="font-size:1rem; font-weight:600;">{day_abbr}</div>
-                            <div style="font-size:0.9rem; opacity:0.7;">{date_str}</div>
+                            <div style="font-size:1.5rem; font-weight:600;">{day_abbr}</div>
+                            <div style="font-size:1.2rem; opacity:0.7;">{date_str}</div>
                         </div>
-                        <div style="text-align:right; font-size:2.5rem; opacity:0.4; font-weight:700;">
+                        <div style="text-align:right; font-size:2rem; opacity:0.4; font-weight:700;">
                             -
                         </div>
                     </div>
@@ -817,7 +852,7 @@ def render_forecast_comparison(df, historical_pred_df, today):
             y=actual['temp'].max(),
             text="Today",
             showarrow=False,
-            font=dict(color="black", size=10),
+            font=dict(color="black", size=5),
             yshift=10
         )
 
@@ -827,7 +862,7 @@ def render_forecast_comparison(df, historical_pred_df, today):
             xaxis=dict(
                 title=dict(
                     text="Date",
-                    font=dict(color="black", size=12)  # <-- correct way
+                    font=dict(color="black", size=5)  # <-- correct way
                 ),
                 tickfont=dict(color="black"),
                 gridcolor='#e2e8f0'
@@ -835,7 +870,7 @@ def render_forecast_comparison(df, historical_pred_df, today):
             yaxis=dict(
                 title=dict(
                     text="Temperature (°C)",
-                    font=dict(color="black", size=12)  # <-- correct
+                    font=dict(color="black", size=5)  # <-- correct
                 ),
                 tickfont=dict(color="black"),
                 gridcolor='#e2e8f0',
@@ -850,7 +885,7 @@ def render_forecast_comparison(df, historical_pred_df, today):
                 y=1.02,
                 xanchor="right",
                 x=1,
-                font=dict(color="black", size=12)
+                font=dict(color="black", size=5)
             ),
             margin = dict(t=0, b=0, l=5, r=5)
         )
