@@ -10,36 +10,7 @@ import shutil
 from io import StringIO  
 from dotenv import load_dotenv
 import streamlit as st
-
-def get_api_key():
-    """Safely get API key from environment variables or Streamlit secrets"""
-    try:
-        # Try Streamlit secrets first (for deployed app)
-        if hasattr(st, 'secrets') and 'WEATHER_API_KEY' in st.secrets:
-            return st.secrets['WEATHER_API_KEY']
-    except:
-        pass
-    
-    # Try environment variables (for local development)
-    load_dotenv()
-    api_key = os.getenv('WEATHER_API_KEY')  # FIXED: Added variable name
-    
-    if not api_key:
-        raise ValueError("""
-        WEATHER_API_KEY not found!
-        
-        Please create a .env file with:
-        WEATHER_API_KEY=your_actual_api_key_here
-        
-        Or set it in Streamlit secrets if deploying.
-        
-        Get your free API key from:
-        - OpenWeatherMap: https://openweathermap.org/api
-        - WeatherAPI: https://www.weatherapi.com/
-        - Visual Crossing: https://www.visualcrossing.com/weather-api
-        """)
-    
-    return api_key
+API_KEY = "PT84G2MR6JNCGJRPNDMJ89XQW"
 
 # -------------------------- CONFIG --------------------------
 # REMOVED: Hardcoded API_KEY - using get_api_key() function instead
@@ -73,7 +44,6 @@ def build_date_chunks(start: datetime, end: datetime) -> List[tuple]:
         cur = chunk_end + timedelta(days=1)
     return chunks
 def fetch_chunk(start: str, end: str) -> pd.DataFrame:
-    API_KEY = get_api_key()
     url = (
         f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/"
         f"{CITY}/{start}/{end}?"
