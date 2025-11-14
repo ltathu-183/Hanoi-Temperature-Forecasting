@@ -474,7 +474,7 @@ def setup_page():
         text-align: right;
         color: white;
         margin: 0 0 0.2rem 0;
-        font-size: 0.8rem;
+        font-size: 1.2rem;
         font-weight: 550;
         padding: 0;
     }
@@ -494,7 +494,7 @@ def setup_page():
     .weather-icon-temp {
         display: flex;
         align-items: center;
-        gap: 0.5rem; /* slightly more breathing room */
+        gap: 0.7rem; /* slightly more breathing room */
     }
     
     .weather-icon {
@@ -502,9 +502,10 @@ def setup_page():
     }
     
     .weather-temp {
-        font-size: 1.6rem !important;
+        font-size: 1.8rem !important;
         font-weight: bold !important;
         color: #ffffff !important;
+        text-align: left;
     }
     
     .weather-condition {
@@ -524,7 +525,7 @@ def setup_page():
         display: flex;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 4rem;
+        gap: 4.5rem;
     }
     
     .weather-metric-item {
@@ -532,16 +533,15 @@ def setup_page():
         min-width: 80px;
         line-height: 1; 
     }
-    }
     
     .metric-value {
-        font-size: 0.4rem;
+        font-size: 0.7rem;
         font-weight: bold;
         color: ffffff;
     }
     
     .metric-label {
-        font-size: 0.5rem;
+        font-size: 0.6rem;
         color: #ffffff;
         margin-top: 0.25rem;
     }
@@ -572,7 +572,7 @@ def setup_page():
     }
     
     .forecast-card .temp {
-        font-size: 1rem !important;
+        font-size: 2rem !important;
         font-weight: bold !important;
         padding = 0rem !important;
     }
@@ -649,7 +649,7 @@ def render_current_weather(df, today):
             st.markdown(
                 f"""
                 <div class="current-weather-full-container">
-                    <div class="current-weather-heading" margin-top:0rem; font-size:1rem; color: #ffffff; text-align: right;'>Current Weather</div>
+                    <div class="current-weather-heading" margin-top:0rem; font-size:1.5rem; color: #ffffff; text-align: right;'>Current Weather</div>
                     <div class="weather-header">
                         <div class="weather-icon-temp">
                             <div class="weather-icon">{icon}</div>
@@ -752,10 +752,10 @@ def render_forecast_cards(df, today, future_df):
                         align-items:center;
                     ">
                         <div style="text-align:left;">
-                            <div style="font-size:0.5rem; font-weight:600;">{day_abbr}</div>
-                            <div style="font-size:0.4rem; opacity:0.85;">{date_str}</div>
+                            <div style="font-size:0.7rem; font-weight:600;">{day_abbr}</div>
+                            <div style="font-size:0.7rem; opacity:0.85;">{date_str}</div>
                         </div>
-                        <div style="text-align:right; font-size:0.6rem; font-weight:600;">
+                        <div style="text-align:right; font-size:1.3rem; font-weight:600;">
                             {temp:.0f}°C
                         </div>
                     </div>
@@ -862,30 +862,30 @@ def render_forecast_comparison(df, historical_pred_df, today):
             xaxis=dict(
                 title=dict(
                     text="Date",
-                    font=dict(color="black", size=5)  # <-- correct way
+                    font=dict(color="black", size=10)  # <-- correct way
                 ),
-                tickfont=dict(color="black"),
+                tickfont=dict(color="black", size=8),
                 gridcolor='#e2e8f0'
             ),
             yaxis=dict(
                 title=dict(
                     text="Temperature (°C)",
-                    font=dict(color="black", size=5)  # <-- correct
+                    font=dict(color="black", size=10)  # <-- correct
                 ),
-                tickfont=dict(color="black"),
+                tickfont=dict(color="black", size=8),
                 gridcolor='#e2e8f0',
                 range=[0, actual['temp'].max() + 2] 
             ),
             plot_bgcolor='white',     # INSIDE background
             paper_bgcolor='white',    # OUTSIDE background
-            height=200,
+            height=150,
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
                 y=1.02,
                 xanchor="right",
                 x=1,
-                font=dict(color="black", size=5)
+                font=dict(color="black", size=10)
             ),
             margin = dict(t=0, b=0, l=5, r=5)
         )
