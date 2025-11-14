@@ -525,7 +525,7 @@ def setup_page():
         display: flex;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 4.5rem;
+        gap: 7rem;
     }
     
     .weather-metric-item {
@@ -742,7 +742,7 @@ def render_forecast_cards(df, today, future_df):
                     f"""
                     <div style="
                         background:#ffffff;
-                        padding:0.7rem 1.0rem;
+                        padding:0.3rem 1.0rem;
                         border-radius:14px;
                         color: 1e293b;
                         width:100%;
@@ -852,7 +852,7 @@ def render_forecast_comparison(df, historical_pred_df, today):
             y=actual['temp'].max(),
             text="Today",
             showarrow=False,
-            font=dict(color="black", size=5),
+            font=dict(color="black", size=10),
             yshift=10
         )
 
@@ -921,7 +921,7 @@ def render_fallback_forecast(df, today):
         st.error(f"Fallback forecast also failed: {e}")
 
 def render_past_weather(df):
-    st.markdown("<h1 style='text-align:center;font-size: 2rem;'>HANOI WEATHER HISTORY</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;font-size: 1.5rem;'>HANOI WEATHER HISTORY</h1>", unsafe_allow_html=True)
 
     # Ensure 'date' column exists and is of type date
     if 'date' not in df.columns:
@@ -940,7 +940,7 @@ def render_past_weather(df):
 
     # === Mode Selection (Styled to appear on dark background) ===
     # Optional: wrap in a dark-background container for visual emphasis
-    st.markdown('<span style="background-color:#ffffff; color:black;">Select mode</span>', unsafe_allow_html=True)
+    st.markdown('<span style="background-color:#ffffff; color:black; font-size:1rem;">Select mode</span>', unsafe_allow_html=True)
     mode = st.selectbox(
         "Select mode",  # accessibility fallback
         options=["Single Date", "Date Range"],
@@ -960,7 +960,7 @@ def render_past_weather(df):
         # Auto-update without button
         row = df[df['date'] == search_date]
         if not row.empty:
-            st.markdown(f"### Weather on {search_date.strftime('%b %d, %Y')}")
+            st.markdown(f"##### Weather on {search_date.strftime('%b %d, %Y')}")
             st.dataframe(row, use_container_width=True)
         else:
             st.warning(f"No data found for {search_date}")
@@ -1048,7 +1048,7 @@ def render_past_weather(df):
                 plot_bgcolor='white',
                 paper_bgcolor='white',
                 margin=dict(l=10, r=10, t=40, b=20),
-                height=300,
+                height=200,
                 xaxis=dict(gridcolor='#e2e8f0', tickfont=dict(size=10, color="black")),
                 yaxis=dict(title=unit, gridcolor='#e2e8f0', tickfont=dict(size=10, color="black")),
                 showlegend=False
@@ -1058,7 +1058,7 @@ def render_past_weather(df):
             with chart_col:
                 st.plotly_chart(fig, use_container_width=True)
             with stats_col:
-                st.markdown("### Summary")
+                st.markdown("##### Summary")
                 for label, value in stats.items():
                     if pd.isna(value):
                         display_val = "N/A"
@@ -1067,7 +1067,7 @@ def render_past_weather(df):
                     else:
                         display_val = f"{value:.1f}{unit}"
                     color = '#ef4444' if label == 'Max' else '#3b82f6' if label == 'Min' else '#203a7d'
-                    st.markdown(f"**{label}:** <span style='color:{color}'>{display_val}</span>", unsafe_allow_html=True)
+                    st.markdown(f"**{label}:** <span style='color:{color};font-size:1rem;'>{display_val}</span>", unsafe_allow_html=True)
             return True
 
         if view_mode == "Single Feature":
@@ -1095,8 +1095,8 @@ def render_past_weather(df):
                 st.dataframe(display_df, use_container_width=True)
 def render_model_performance():
     """Render model performance page with metric cards"""
-    st.markdown("<h1 style='text-align:center; font-size: 2rem;'>MODEL PERFORMANCE</h1>", unsafe_allow_html=True)
-    st.markdown("#### Performance Metrics")
+    st.markdown("<h1 style='text-align:center; font-size: 1.5rem;'>MODEL PERFORMANCE</h1>", unsafe_allow_html=True)
+    st.markdown("###### Performance Metrics")
     st.markdown(
         """
         <div style="
@@ -1108,14 +1108,14 @@ def render_model_performance():
             margin-bottom: 0.5rem;
             text-align: left;
         ">
-            <div style="display: flex; gap: 6rem;">
-                <div style="font-size: 1rem; line-height: 1.4;">
+            <div style="display: flex; gap: 10rem;">
+                <div style="font-size: 0.8rem; line-height: 1.7;">
                     <div>Model:</div>
                     <div>Input Features: </div>
                     <div>Training Period: </div>
                     <div>Prediction Target: </div>
                 </div>
-                <div style="font-size: 1rem; line-height: 1.4;">
+                <div style="font-size: 0.8rem; line-height: 1.7; text-align: left;">
                     <div> <strong>CatBoost</strong></div>
                     <div> <strong>1200 features</strong></div>
                     <div> <strong>01/10/2015–01/10/2025</strong></div>
@@ -1127,7 +1127,7 @@ def render_model_performance():
         unsafe_allow_html=True,
     )
 
-    st.markdown("#### Performance Metrics")
+    st.markdown("###### Performance Metrics")
     
     # Define your metrics
     metrics = [
@@ -1157,14 +1157,14 @@ def render_model_performance():
                     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                     justify-content:space-between;
                 ">
-                    <div style="text-align:left; font-size:1rem; opacity:0.8;">{label}</div>
-                    <div style="text-align:center; font-size:1.2rem; font-weight:600;">{value}</div>
+                    <div style="text-align:left; font-size:0.8rem; opacity:0.8;">{label}</div>
+                    <div style="text-align:center; font-size:0.8rem; font-weight:600;">{value}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-    st.markdown("#### Feature Importance")
+    st.markdown("###### Feature Importance")
     st.info("Top 10 features: day_length_hours_lag_21, day_length_hours_lag_30, temp_sealevelpressure_interaction, feelslike, temp, day_avg_feelslike, day_avg_tempmin, rolling_30_sealevelpressure, rolling_3_sealevelpressure_change, season_avg_sealevelpressure")
 
 def render_other_settings():
