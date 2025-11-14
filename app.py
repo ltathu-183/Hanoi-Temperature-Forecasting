@@ -378,6 +378,9 @@ def setup_page():
         height: 100%;
         overflow: hidden;
     }
+    .stSelectbox, .stDateInput, .stSelectbox label, .stDateInput label, .stSelectbox div, .stDateInput div {
+        font-size: 0.8rem;
+    }
     .stButton>button {
         background-color: #575ea5 !important;  /* Purple background */
         color: #ffffff !important;             /* White text */
@@ -899,7 +902,6 @@ def render_forecast_comparison(df, historical_pred_df, today):
 
         # --- Layout ---
         fig.update_layout(
-            title=None,  # REMOVE TITLE
             xaxis=dict(
                 title=dict(
                     text="Date",
@@ -1088,7 +1090,7 @@ def render_past_weather(df):
                 title=f"{feature.replace('_',' ').title()} ({unit})",
                 plot_bgcolor='white',
                 paper_bgcolor='white',
-                margin=dict(l=10, r=10, t=40, b=20),
+                margin=dict(l=20, r=20, t=40, b=20),
                 height=200,
                 xaxis=dict(gridcolor='#e2e8f0', tickfont=dict(size=10, color="black")),
                 yaxis=dict(title=unit, gridcolor='#e2e8f0', tickfont=dict(size=10, color="black")),
@@ -1108,7 +1110,7 @@ def render_past_weather(df):
                     else:
                         display_val = f"{value:.1f}{unit}"
                     color = '#ef4444' if label == 'Max' else '#3b82f6' if label == 'Min' else '#203a7d'
-                    st.markdown(f"**{label}:** <span style='color:{color};font-size:1rem;'>{display_val}</span>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size: 0.9rem; line-height: 1.5; margin-bottom: 0.5rem;'><strong>  {label}:</strong> <span style='color:{color};'>{display_val}</span></div>", unsafe_allow_html=True)
             return True
 
         if view_mode == "Single Feature":
@@ -1128,7 +1130,7 @@ def render_past_weather(df):
                     cols_to_show.append('conditions')
                 st.dataframe(display_df[cols_to_show].sort_values('date', ascending=False), use_container_width=True)
         else:  # "All Features"
-            st.markdown("### All Features")
+            st.markdown("###### All Features")
             with st.expander("View Full Data (All Columns)", expanded=False):
                 display_df = range_df.copy()
                 display_df['date'] = display_df['date'].apply(lambda d: d.strftime('%Y-%m-%d'))
