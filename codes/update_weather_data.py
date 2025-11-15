@@ -10,7 +10,9 @@ import shutil
 from io import StringIO  
 from dotenv import load_dotenv
 import streamlit as st
-API_KEY = "PT84G2MR6JNCGJRPNDMJ89XQW"
+import os
+API_KEY = os.getenv("VISUAL_CROSSING_API_KEY")
+
 
 # -------------------------- CONFIG --------------------------
 # REMOVED: Hardcoded API_KEY - using get_api_key() function instead

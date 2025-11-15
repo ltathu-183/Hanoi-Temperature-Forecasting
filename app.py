@@ -66,7 +66,8 @@ def setup_paths() -> Dict[str, Path]:
             'data_file': data_dir / "realtime" / "hanoi_weather_complete.csv",
             'update_script': codes_dir / "update_weather_data.py",
             'model_file': model_dir / "daily" / "BEST_CATBOOST_TIMESERIES.joblib",
-            'selection_file': model_dir / "daily" / "selection_result.joblib"
+            'selection_file': model_dir / "daily" / "selection_result.joblib",
+            'prediction_script': codes_dir / "generate_full_multi_horizon_predictions.py"
         }
         
         # Add to Python path safely
@@ -95,9 +96,11 @@ PATHS = setup_paths()
 # --------------------------
 # DATA MANAGEMENT
 # --------------------------
+def is_streamlit_cloud():
+    return os.path.exists("/home/appuser")
 def safe_prediction_update():
     """Run multi-horizon prediction generation in background"""
-    pred_script = PATHS['project_root'] / "generate_full_multi_horizon_predictions.py"
+    pred_script = PATHS['prediction_script']
     if not pred_script.exists():
         st.sidebar.warning(f"Prediction script not found: {pred_script}")
         return False
@@ -125,58 +128,37 @@ def safe_prediction_update():
     threading.Thread(target=pred_thread, daemon=True).start()
     st.sidebar.info("Generating multi-horizon predictions...")
     return True
-def safe_data_update():
-    """Run data update in background with comprehensive error handling"""
+def safe_data_update(run_prediction_after: bool = False):
     if not PATHS['update_script'].exists():
-        st.sidebar.warning(f"Update script not found at: {PATHS['update_script']}")
+        st.sidebar.warning(f"Update script not found: {PATHS['update_script']}")
         return False
-    
+
     def update_thread():
-        
         try:
-            # Use the project root as working directory (where the update script expects to run)
-            working_dir = PATHS['project_root']
-            
-            # Build the command - make sure we're using the same Python that runs the app
             cmd = [sys.executable, str(PATHS['update_script'])]
-            
-            # Run the update script with the same environment
             result = subprocess.run(
                 cmd,
-                cwd=working_dir,
+                cwd=PATHS['project_root'],
                 capture_output=True,
                 text=True,
                 timeout=120,
-                env=os.environ  # Pass the current environment
+                env=os.environ
             )
-            
-            # Detailed logging of results
-            print(f"[update] Return code: {result.returncode}")
-            
             if result.returncode == 0:
-                print("✅ Weather data updated successfully")
-                if result.stdout:
-                    print(f"Update output: {result.stdout}")
+                print("Weather data updated")
+                if run_prediction_after:
+                    # Now safely run prediction (data is ready)
+                    safe_prediction_update()
             else:
-                print(f"Update failed with return code: {result.returncode}")
-                if result.stderr:
-                    print(f"Update stderr: {result.stderr}")
-                if result.stdout:
-                    print(f"Update stdout: {result.stdout}")
-                    
-        except subprocess.TimeoutExpired:
-            print("Update timed out after 120 seconds")
+                print(f"Update failed: {result.stderr}")
         except Exception as e:
-            print(f" Update error: {e}")
-            import traceback
-            print(f" Update traceback: {traceback.format_exc()}")
-    
-    # Start the update in a background thread
-    thread = threading.Thread(target=update_thread, daemon=True)
-    thread.start()
-    
-    st.sidebar.info("Update started in background...")
+            print(f"Update error: {e}")
+            traceback.print_exc()
+
+    threading.Thread(target=update_thread, daemon=True).start()
+    st.sidebar.info("Updating weather data...")
     return True
+
 @st.cache_data(ttl=1800)
 def load_csv() -> pd.DataFrame:
     """Load weather data with comprehensive error handling"""
@@ -1272,20 +1254,24 @@ def main():
 
         # Auto-update
         if not st.session_state.get('auto_update_done', False):
-            try:
-                if not df.empty and 'datetime' in df.columns:
-                    last_recorded = pd.to_datetime(df['datetime']).dt.date.max()
-                    if today > last_recorded:
-                        st.sidebar.info(" Data is outdated. Triggering update...")
-                        st.cache_data.clear()
-                        safe_data_update()
-                        safe_prediction_update() 
+            if is_streamlit_cloud():
+                st.session_state.auto_update_done = True  # skip
+            else:
+                try:
+                    if not df.empty and 'datetime' in df.columns:
+                        last_recorded = pd.to_datetime(df['datetime']).dt.date.max()
+                        if today > last_recorded:
+                            st.sidebar.info("Data is outdated. Updating...")
+                            st.cache_data.clear()
+                            safe_data_update(run_prediction_after=True)  
+                            st.session_state.auto_update_done = True
+                        else:
+                            st.session_state.auto_update_done = True
+                    else:
                         st.session_state.auto_update_done = True
-                else:
-                    st.session_state.auto_update_done = True  # no data → skip
-            except Exception as e:
-                st.sidebar.error(f"Auto-update failed: {e}")
-                st.session_state.auto_update_done = True
+                except Exception as e:
+                    st.sidebar.error(f"Auto-update failed: {e}")
+                    st.session_state.auto_update_done = True
         # Sidebar
         with st.sidebar:
             st.markdown('<div class="sidebar-title">Navigation Menu</div>', unsafe_allow_html=True)
