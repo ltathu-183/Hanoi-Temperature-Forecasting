@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 from datetime import datetime, date
 
-project_root = Path(__file__).parent.resolve()
+project_root = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "codes"))
 
@@ -101,13 +101,13 @@ def main():
         effective_start_date = default_start_date
 
     # Convert start date to index
-    future_mask = df["datetime"].dt.date >= effective_start_date
-    if future_mask.any():
-        start_idx = future_mask.idxmax()
-        print(f" Will start generating from {effective_start_date} at index {start_idx}")
-    else:
+    # Find first index where datetime >= effective_start_date
+    valid_indices = df[df["datetime"].dt.date >= effective_start_date].index
+    if valid_indices.empty:
         print(" No new dates to forecast.")
         return
+    start_idx = valid_indices[0]
+    print(f" Will start generating from {effective_start_date} at index {start_idx}")
     # -----------------------------------------------------------
 
     total_days = len(df)
@@ -127,7 +127,11 @@ def main():
             if isinstance(pred_result, pd.DataFrame) and len(pred_result) >= 5:
                 as_of_date = df.iloc[i]["datetime"].date()
                 for h in range(5):
-                    target_date = pd.to_datetime(pred_result.iloc[h]["date"]).date()
+                    raw_date = pred_result.iloc[h]["date"]
+                    if isinstance(raw_date, str):
+                        target_date = pd.to_datetime(raw_date).date()
+                    else:
+                        target_date = pd.to_datetime(raw_date).date() 
                     predicted_temp = float(pred_result.iloc[h]["y_pred"])
                     # Compute model_day = target_date - as_of_date
                     model_day = (target_date - as_of_date).days
