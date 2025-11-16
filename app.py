@@ -56,25 +56,25 @@ def setup_paths() -> Dict[str, Path]:
         project_root = current_dir
         data_dir = current_dir / "data"
         model_dir = current_dir / "models"
-        codes_dir = current_dir / "codes"
+        notebooks_dir = current_dir / "notebooks"
         
         paths = {
             'data_dir': data_dir,
             'model_dir': model_dir,
-            'codes_dir': codes_dir,
+            'notebooks_dir': notebooks_dir,
             'project_root': project_root,
             'data_file': data_dir / "realtime" / "hanoi_weather_complete.csv",
-            'update_script': codes_dir / "update_weather_data.py",
-            'model_file': model_dir / "daily" / "BEST_CATBOOST_TIMESERIES.joblib",
-            'selection_file': model_dir / "daily" / "selection_result.joblib",
-            'prediction_script': codes_dir / "generate_full_multi_horizon_predictions.py"
+            'update_script': notebooks_dir / "update_weather_data.py",
+            'model_file': model_dir / "daily" / "BEST_CATBOOST_TUNED_DAILY.joblib",
+            'selection_file': model_dir / "daily" / "selection_result_daily.joblib",
+            'prediction_script': notebooks_dir / "generate_full_multi_horizon_predictions.py"
         }
         
         # Add to Python path safely
         if project_root.exists() and str(project_root) not in sys.path:
             sys.path.insert(0, str(project_root))
-        if codes_dir.exists() and str(codes_dir) not in sys.path:
-            sys.path.insert(0, str(codes_dir))
+        if notebooks_dir.exists() and str(notebooks_dir) not in sys.path:
+            sys.path.insert(0, str(notebooks_dir))
         if model_dir.exists() and str(model_dir) not in sys.path:
             sys.path.insert(0, str(model_dir))
         if data_dir.exists() and str(data_dir) not in sys.path:
@@ -86,9 +86,9 @@ def setup_paths() -> Dict[str, Path]:
         current_dir = Path(__file__).parent
         return {
             'data_file': current_dir / "data" / "realtime" / "hanoi_weather_complete.csv",
-            'update_script': current_dir / "codes" / "update_weather_data.py",
-            'model_file': current_dir / "models" / "daily" / "BEST_CATBOOST_TIMESERIES.joblib",
-            'selection_file': current_dir / "models" / "selection_result.joblib"
+            'update_script': current_dir / "notebooks" / "update_weather_data.py",
+            'model_file': current_dir / "models" / "daily" / "BEST_CATBOOST_TUNED_DAILY.joblib",
+            'selection_file': current_dir / "models" / "selection_result_daily.joblib"
         }
 
 PATHS = setup_paths()
@@ -106,6 +106,7 @@ def safe_prediction_update():
         return False
 
     def pred_thread():
+        
         try:
             cmd = [sys.executable, str(pred_script)]
             result = subprocess.run(
@@ -249,7 +250,7 @@ def get_weather_predictions(df, today):
     """Get weather predictions with detailed debugging"""
     try:
         # Import here to ensure fresh import with correct paths
-        from codes.preprocess_data import predict_future
+        from notebooks.preprocess_data import predict_future
         
         # Check if model files exist
         model_exists = PATHS['model_file'].exists()
@@ -335,7 +336,43 @@ def create_fallback_predictions(df, today):
             "temp": [27.0, 27.5, 26.8, 28.0, 27.2]
         })
 
-
+def load_model_metrics() -> Dict[str, Any]:
+    """
+    Load model metrics from your saved CatBoost model file.
+    Only loads what actually exists in BEST_CATBOOST_TUNED_DAILY.joblib.
+    """
+    model_path = PATHS['model_file']
+    
+    metrics = {
+        'model_info': {},
+        'status': {
+            'model_loaded': False,
+            'error': None
+        }
+    }
+    
+    try:
+        if not model_path.exists():
+            metrics['status']['error'] = f"Model file not found: {model_path}"
+            return metrics
+            
+        model_data = joblib.load(model_path)
+        
+        # Only R² metrics are saved in your actual training pipeline
+        metrics['model_info'] = {
+            'final_r2_mean': float(model_data.get('final_r2_mean', 0.0)),
+            'best_r2': float(model_data.get('best_r2', 0.0)),
+            'final_r2_per_target': model_data.get('final_r2_per_target', {}),
+            'best_iteration': int(model_data.get('best_iteration', 0)),
+            'n_features': len(model_data.get('feature_names', [])),
+            'feature_names': model_data.get('feature_names', [])
+        }
+        metrics['status']['model_loaded'] = True
+        
+    except Exception as e:
+        metrics['status']['error'] = f"Error loading model: {str(e)}"
+    
+    return metrics
 # --------------------------
 # STREAMLIT UI SETUP
 # --------------------------
@@ -362,7 +399,7 @@ def setup_page():
         overflow: hidden;
     }
     .stSelectbox, .stDateInput, .stSelectbox label, .stDateInput label, .stSelectbox div, .stDateInput div {
-        font-size: 0.8rem;
+        font-size: 1rem;
     }
     .stButton>button {
         background-color: #575ea5 !important;  /* Purple background */
@@ -637,9 +674,52 @@ def render_forecasting(df, today):
         
         # Display temperature trend
         historical_pred_df = load_historical_forecasts()  # your existing loader
+        
+        # Set DEFAULT range: all available data
+        if not historical_pred_df.empty:
+            default_start = historical_pred_df["target_date"].min().date()
+            default_end = today
+        else:
+            # Fallback: last 90 days
+            default_start = today - timedelta(days=90)
+            default_end = today
 
-        # Render the unified chart
+        # Render chart with DEFAULT range first
         render_forecast_comparison(df, historical_pred_df, today)
+
+        # --- Compact date pickers BELOW the chart ---
+        st.markdown("<div style='margin-top:15px; font-size: 1rem;'> Comparing Actual vs Prediction </div>", unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([2, 2, 4])
+        
+        with col1:
+            chart_start = st.date_input(
+                "From",
+                value=default_start,
+                min_value=default_start,  # Can't go before earliest data
+                max_value=today,
+                label_visibility="collapsed"
+            )
+        with col2:
+            chart_end = st.date_input(
+                "To",
+                value=default_end,
+                min_value=chart_start,
+                max_value=today,
+                label_visibility="collapsed"
+            )
+        with col3:
+            st.write("")
+
+        # Only re-render if user changed dates
+        if chart_start != default_start or chart_end != default_end:
+            render_forecast_comparison(
+                df, 
+                historical_pred_df, 
+                today, 
+                start_date_input=chart_start, 
+                end_date_input=chart_end
+            )
         
     except Exception as e:
         st.error(f"Forecast rendering error: {e}")
@@ -815,51 +895,74 @@ def render_forecast_cards(df, today, future_df):
                     unsafe_allow_html=True,
                 )
 
-def render_forecast_comparison(df, historical_pred_df, today):
+def render_forecast_comparison(df, historical_pred_df, today, start_date_input=None, end_date_input=None):
     """
     Show actual temps + 5 horizon lines (1-day to 5-day forecasts)
     from historical predictions (dates ≤ today).
+    
+    Parameters:
+    - start_date_input: user-selected start date (datetime.date or None)
+    - end_date_input: user-selected end date (datetime.date or None)
     """
     try:
-        st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)  # space before chart
-        today_ts = pd.Timestamp(today)
+        st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
 
+        today_ts = pd.Timestamp(today)
+        
         # --- Actual temperatures ---
         actual = df[['datetime', 'temp']].copy()
         actual['datetime'] = pd.to_datetime(actual['datetime'])
         actual = actual.set_index('datetime').sort_index()
-        start_date = historical_pred_df["target_date"].min()
-        actual = actual[(actual.index <= today_ts) & (actual.index >= start_date)]
 
-        # --- Initialize Plotly figure ---
+        # Determine date range
+        if start_date_input and end_date_input:
+            start_ts = pd.Timestamp(start_date_input)
+            end_ts = pd.Timestamp(end_date_input)
+            # Cap end at today
+            end_ts = min(end_ts, today_ts)
+        else:
+            # Default: show last 90 days or from earliest prediction
+            if not historical_pred_df.empty:
+                default_start = max(
+                    actual.index.min(),
+                    historical_pred_df["target_date"].min(),
+                    today_ts - pd.Timedelta(days=90)
+                )
+            else:
+                default_start = today_ts - pd.Timedelta(days=90)
+            start_ts = default_start
+            end_ts = today_ts
+
+        # Filter actual data
+        actual = actual[(actual.index >= start_ts) & (actual.index <= end_ts)]
+
+        # --- Plotly figure ---
         fig = go.Figure()
 
-        # >>> ACTUAL LINE (SOLID) <<<
+        # Actual line
         fig.add_trace(go.Scatter(
             x=actual.index,
             y=actual['temp'],
             mode='lines',
             name='Actual',
-            line=dict(color="#3a0eca", width=2.5)  # Dark gray/black
+            line=dict(color="#3a0eca", width=2.5)
         ))
 
-        # --- 5 HORIZON LINES (DOTTED) ---
+        # Historical predictions
         if not historical_pred_df.empty:
             past_pred = historical_pred_df[
-                historical_pred_df['as_of_date'] <= today_ts
+                (historical_pred_df['as_of_date'] <= today_ts) &
+                (historical_pred_df['target_date'] >= start_ts) &
+                (historical_pred_df['target_date'] <= end_ts)
             ].copy()
 
             if not past_pred.empty:
                 past_pred = past_pred.sort_values('as_of_date')
-                # Color palette: red → blue (1-day to 5-day)
                 colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6']
-                
                 for horizon in [1, 2, 3, 4, 5]:
                     h_data = past_pred[past_pred['horizon'] == horizon]
                     if not h_data.empty:
-                        # Get most recent prediction for each target_date
                         h_series = h_data.groupby('target_date')['predicted_temp'].last()
-                        
                         fig.add_trace(go.Scatter(
                             x=h_series.index,
                             y=h_series.values,
@@ -867,43 +970,34 @@ def render_forecast_comparison(df, historical_pred_df, today):
                             name=f'{horizon}-Day Forecast',
                             line=dict(color=colors[horizon-1], width=1.4, dash='dot')
                         ))
-        # --- Add TODAY vertical line ---
-        fig.add_vline(
-            x=today_ts,
-            line_width=1.4,
-            line_dash="dash",
-            line_color="red"
-        )
-        fig.add_annotation(
-            x=today_ts,
-            y=actual['temp'].max(),
-            text="Today",
-            showarrow=False,
-            font=dict(color="black", size=10),
-            yshift=10
-        )
 
-        # --- Layout ---
+        # Today line (only if within view)
+        if start_ts <= today_ts <= end_ts:
+            fig.add_vline(x=today_ts, line_width=1.4, line_dash="dash", line_color="red")
+            fig.add_annotation(
+                x=today_ts,
+                y=actual['temp'].max() if not actual.empty else 30,
+                text="Today",
+                showarrow=False,
+                font=dict(color="black", size=10),
+                yshift=10
+            )
+
+        # Layout
         fig.update_layout(
             xaxis=dict(
-                title=dict(
-                    text="Date",
-                    font=dict(color="black", size=10)  # <-- correct way
-                ),
+                title=dict(text="Date", font=dict(color="black", size=10)),
                 tickfont=dict(color="black", size=8),
                 gridcolor='#e2e8f0'
             ),
             yaxis=dict(
-                title=dict(
-                    text="Temperature (°C)",
-                    font=dict(color="black", size=10)  # <-- correct
-                ),
+                title=dict(text="Temperature (°C)", font=dict(color="black", size=10)),
                 tickfont=dict(color="black", size=8),
                 gridcolor='#e2e8f0',
-                range=[0, actual['temp'].max() + 2] 
+                range=[0, actual['temp'].max() + 2] if not actual.empty else [0, 35]
             ),
-            plot_bgcolor='white',     # INSIDE background
-            paper_bgcolor='white',    # OUTSIDE background
+            plot_bgcolor='white',
+            paper_bgcolor='white',
             height=150,
             legend=dict(
                 orientation="h",
@@ -913,14 +1007,13 @@ def render_forecast_comparison(df, historical_pred_df, today):
                 x=1,
                 font=dict(color="black", size=10)
             ),
-            margin = dict(t=0, b=0, l=5, r=5)
+            margin=dict(t=0, b=0, l=5, r=5)
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
     except Exception as e:
         st.error(f"Chart error: {e}")
-        import traceback
         st.text(traceback.format_exc())
 
 
@@ -947,7 +1040,7 @@ def render_fallback_forecast(df, today):
         st.error(f"Fallback forecast also failed: {e}")
 
 def render_past_weather(df):
-    st.markdown("<h1 style='text-align:center;font-size: 1.5rem;'>HANOI WEATHER HISTORY</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;font-size: 2rem;'>HANOI WEATHER HISTORY</h1>", unsafe_allow_html=True)
 
     # Ensure 'date' column exists and is of type date
     if 'date' not in df.columns:
@@ -986,7 +1079,7 @@ def render_past_weather(df):
         # Auto-update without button
         row = df[df['date'] == search_date]
         if not row.empty:
-            st.markdown(f"##### Weather on {search_date.strftime('%b %d, %Y')}")
+            st.markdown(f"###### Weather on {search_date.strftime('%b %d, %Y')}")
             st.dataframe(row, use_container_width=True)
         else:
             st.warning(f"No data found for {search_date}")
@@ -1119,8 +1212,12 @@ def render_past_weather(df):
                 display_df['date'] = display_df['date'].apply(lambda d: d.strftime('%Y-%m-%d'))
                 display_df = display_df.sort_values('date', ascending=False)
                 st.dataframe(display_df, use_container_width=True)
-def render_model_performance():
-    """Render model performance page with metric cards"""
+def render_model_performance(metrics):
+    model_info = metrics['model_info']
+    overall_r2 = model_info['final_r2_mean']
+    n_features = model_info['n_features']
+    top_features = ", ".join(model_info['feature_names'][:10])
+
     st.markdown("<h1 style='text-align:center; font-size: 1.5rem;'>MODEL PERFORMANCE</h1>", unsafe_allow_html=True)
     st.markdown("###### Performance Metrics")
     st.markdown(
@@ -1156,18 +1253,14 @@ def render_model_performance():
     st.markdown("###### Performance Metrics")
     
     # Define your metrics
-    metrics = [
-        ("R² Score", "0.82"),
-        ("MAE", "1.68°C"),
-        ("RMSE", "2.15°C"),
-        ("Training Period", "9 years")
+    perf_metrics = [
+        ("Overall R²", f"{overall_r2:.4f}"),
+        ("Number of features", f"{n_features}"),
     ]
-    
-    # Create 2 columns
     cols = st.columns(2)
-    
-    for i, (label, value) in enumerate(metrics):
-        with cols[i % 2]:  # Alternate between col0 and col1
+
+    for i, (label, value) in enumerate(perf_metrics):
+        with cols[i % 2]:
             st.markdown(
                 f"""
                 <div style="
@@ -1191,21 +1284,21 @@ def render_model_performance():
             )
 
     st.markdown("###### Feature Importance")
-    st.markdown("""
-    <div style="
-        font-size: 0.8rem;
-        background:#dbeafe;
-        color:#0c4a6e;
-        padding:8px 10px;
-        border-left:4px solid #3b82f6;
-        border-radius:5px;
-    ">
-    <b>Top 10 features:</b> day_length_hours_lag_21, day_length_hours_lag_30,
-    temp_sealevelpressure_interaction, feelslike, temp, day_avg_feelslike,
-    day_avg_tempmin, rolling_30_sealevelpressure, rolling_3_sealevelpressure_change,
-    season_avg_sealevelpressure
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div style="
+            font-size: 0.8rem;
+            background:#dbeafe;
+            color:#0c4a6e;
+            padding:8px 10px;
+            border-left:4px solid #3b82f6;
+            border-radius:5px;
+        ">
+        <b>Top 10 features:</b> {top_features}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 def render_other_settings():
     """Render settings page with black text"""
@@ -1311,6 +1404,7 @@ def main():
             except Exception:
                 st.caption("Data status: Unknown")
         
+        metrics = load_model_metrics()
         # Page routing with error handling
         try:
             if st.session_state.page == "Forecasting":
@@ -1318,7 +1412,7 @@ def main():
             elif st.session_state.page == "Past weather data":
                 render_past_weather(df)
             elif st.session_state.page == "Model performance":
-                render_model_performance()
+                render_model_performance(metrics)
             elif st.session_state.page == "Other settings":
                 render_other_settings()
         except Exception as e:
