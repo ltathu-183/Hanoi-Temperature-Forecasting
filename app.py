@@ -911,30 +911,44 @@ def render_forecast_comparison(df, historical_pred_df, today, start_date_input=N
         
         # --- Actual temperatures ---
         actual = df[['datetime', 'temp']].copy()
-        actual['datetime'] = pd.to_datetime(actual['datetime'])
+        actual['datetime'] = pd.to_datetime(actual['datetime']).dt.normalize()
         actual = actual.set_index('datetime').sort_index()
 
+        # Determine date range
         # Determine date range
         if start_date_input and end_date_input:
             start_ts = pd.Timestamp(start_date_input)
             end_ts = pd.Timestamp(end_date_input)
-            # Cap end at today
-            end_ts = min(end_ts, today_ts)
+            # Do NOT cap end_ts here — allow future dates
         else:
-            # Default: show last 90 days or from earliest prediction
+            # Default: last 90 days up to 5 days in the future
             if not historical_pred_df.empty:
                 default_start = max(
                     actual.index.min(),
                     historical_pred_df["target_date"].min(),
                     today_ts - pd.Timedelta(days=90)
                 )
+                default_end = max(
+                    today_ts,
+                    historical_pred_df["target_date"].max()
+                )
             else:
                 default_start = today_ts - pd.Timedelta(days=90)
+                default_end = today_ts + pd.Timedelta(days=5)
             start_ts = default_start
-            end_ts = today_ts
+            end_ts = default_end
 
-        # Filter actual data
-        actual = actual[(actual.index >= start_ts) & (actual.index <= end_ts)]
+        # Filter actual data: only up to today
+        actual_end = min(end_ts, today_ts)
+        actual = actual[(actual.index >= start_ts) & (actual.index <= actual_end)]
+
+        # Filter forecasts: allow future target_date
+        if not historical_pred_df.empty:
+            past_pred = historical_pred_df[
+                (historical_pred_df['as_of_date'] <= today_ts) &  # only forecasts made by today
+                (historical_pred_df['target_date'] >= start_ts) &
+                (historical_pred_df['target_date'] <= end_ts)     # can be future
+            ].copy()
 
         # --- Plotly figure ---
         fig = go.Figure()
