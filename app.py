@@ -377,8 +377,6 @@ def load_model_metrics() -> Dict[str, Any]:
 # STREAMLIT UI SETUP
 # --------------------------
 def setup_page():
-    """Configure Streamlit page and styles"""
-
     st.set_page_config(
         page_title="Hanoi Weather Forecast",
         page_icon="🌤️",
@@ -392,112 +390,103 @@ def setup_page():
     .stApp {
         background: #f9faff !important;
         color: #1e293b !important;
-        zoom: 1;              /* For Chrome/Edge */
-        transform: scale(1);  /* For Firefox and others */
+        zoom: 1;
+        transform: scale(1);
         width: 100%;
         height: 100%;
         overflow: hidden;
     }
-    .stSelectbox, .stDateInput, .stSelectbox label, .stDateInput label, .stSelectbox div, .stDateInput div {
-        font-size: 1rem;
+    
+    /* GLOBAL FONT: Roboto */
+    body, .stApp, .stMarkdown, .stText, .stButton button, input, textarea, pre, code {
+        font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
     }
-    .stButton>button {
-        background-color: #575ea5 !important;  /* Purple background */
-        color: #ffffff !important;             /* White text */
-        border-radius: 15px !important;
-        padding: 12px 24px !important;
-        font-size: 0.7rem !important;
+
+    /* SIDEBAR */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(135deg, #1699e8 0%, #3d69e7 100%) !important;
+        min-width: 250px !important;
+        max-width: 250px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        text-align: left !important;
+    }
+
+    /* "WeatherApp" title */
+    .sidebar-brand {
+        font-size: 1.2rem !important;
         font-weight: 500 !important;
-        border: none !important;
-        transition: all 0.2s ease !important;
+        color: white !important;
+        padding: 0.6rem 0.5rem 0.8rem 0.5rem !important;
+        text-align: left !important;
+        border-bottom: 1px solid rgba(255,255,255,0.2);
+        margin-bottom: 0.8rem;
     }
 
-    .stButton>button:hover {
-        background-color: #79a8e7 !important;
-        color: #182850 !important;
-        transform: translateY(-2px);
+    /* Navigation Menu Title */
+    .sidebar-title {
+        font-size: 1rem !important;
+        font-weight: 400 !important;
+        color: #ffffff !important;
+        margin-bottom: 1rem !important;
+        text-align: left !important;
+        padding-left: 0.5rem;
     }
 
-    .stButton>button:active {
-        transform: translateY(1px);
+    /* Sidebar buttons */
+    section[data-testid="stSidebar"] .stButton > button {
+        font-size: 0.5rem !important;
+        color: #ffffff !important;
+        background-color: #48a7ec !important;
+        text-align: left !important;
+        border-radius: 8px !important;
+        padding: 8px 12px !important;
+        margin: 3px 0 !important;
     }
-    /* REMOVE ALL TOP/BOTTOM PADDING */
-    .main .block-container {padding:0rem !important;}
 
-    .stDateInput input {
-        color: black !important;
-        background-color: white !important;
+    /* Data Status (Last update, Records) */
+    section[data-testid="stSidebar"] .caption {
+        font-size: 0.5rem !important;
+        color: #ffffff !important;
+        text-align: left !important;
+        padding-left: 0.5rem;
     }
-    .stDateInput label {
-        color: black !important;
+
+    /* CURRENT WEATHER CARD */
+    .current-weather-full-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white;
+        border-radius: 16px;
+        padding: 1rem;
+        margin: 0.5rem auto 1rem auto;
+        width: 100%;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        height: auto;
+        min-height: 120px;
+        gap: 0.8rem;
     }
-    /* Style the temperature trend chart background */
+
+    /* Forecast Cards */
+    .forecast-card {
+        background: white !important;
+        border-radius: 15px;
+        padding: 0.8rem 1rem;
+        text-align: center;
+        height: 100%;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    /* Temperature Trend Chart */
     div[data-testid="stChart"] {
         background-color: white !important;
         padding: 0.1rem !important;
         border-radius: 12px !important;
-    }               
-    .temperature-trend-container {
-        background-color: #ffffff !important;
     }
 
-    .temperature-trend-container div[data-testid="stChart"] {
-        background-color: #ffffff !important;
-    }
-    section[data-testid="stSidebar"] .stButton > button {
-        background-color: #ffffff !important;     /* White background */
-        color: #000000 !important;                /* Black text */
-        border-radius: 8px !important;
-        padding: 10px 16px !important;
-        font-size: 1rem !important;
-        font-weight: 500 !important;
-        transition: all 0.2s ease !important;
-    }
-    /* Also fix the SVG/chart internals if needed */
-    .stLineChart svg {
-        background-color: #ffffff !important;
-    }         
-    /* WIDER SIDEBAR */
-    section[data-testid="stSidebar"] {
-        background: #2e3190  !important;
-        min-width: 280 !important;
-        max-width: 300px !important;
-    }
-    
-    /* SIDEBAR */
-    section[data-testid="stSidebar"] * {
-        color: #ffffff !important;
-    }
-    .sidebar-title {
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-        color: white !important;
-        margin-bottom: 1rem !important;
-    }
-    section[data-testid="stSidebar"] .stButton>button {
-        background: #575ea5 !important;
-        color: #ffffff !important;
-        border-radius: 15px;
-        width: 90%;
-        padding: 12px;
-        margin: 3px 0;
-        font-size: 0.5rem;
-        font-weight: 500;
-        border: 0px;
-        transition: all 0.2s;
-    }
-    
-    section[data-testid="stSidebar"] .stButton>button:hover {
-        background: #79a8e7  !important;
-        color: #182850  !important;
-        transform: translateX(4px);
-    }
-    
-    section[data-testid="stSidebar"] .stButton>button[aria-pressed="true"] {
-        background: #79a8e7  !important;
-        color: #ffffff !important;
-        font-weight: bold;
-    }                        
     /* TITLES - Left aligned */
     .left-title {
         text-align: left !important;
@@ -507,7 +496,6 @@ def setup_page():
         font-size: 1rem !important;
         font-weight: 600 !important;
     }
-    
     .left-date {
         text-align: left !important;
         color: #000000 !important;
@@ -517,32 +505,32 @@ def setup_page():
         font-size: 0.8rem !important;
         font-weight: 400 !important;
     }
-
     /* SINGLE CONTAINER FOR ALL CURRENT WEATHER */
     .current-weather-full-container {
-        background: #2e3190;
+        background-color: #3d69e7;  /* Updated to your requested color */
         color: #ffffff;
         border-radius: 16px;
-        padding: 0rem 1rem;
-        margin: 0rem auto 0rem auto; 
-        width: 100%; /* Stretch to full width */
-        max-width: none; /* Remove max-width constraint */
-        box-shadow: 0 10px 17px rgba(0,0,0,0.1);
+        padding: 1rem;
+        margin: 0.5rem auto 1rem auto;
+        width: 100%;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.12);
         display: flex;
         flex-direction: column;
-        align-items: center; 
-        height: 28vh;
+        align-items: stretch;
+        justify-content: flex-start;
+        height: auto;               /* Let content determine height */
+        min-height: 120px;          /* Minimum height for visual consistency */
+        gap: 0.8rem;                /* Consistent spacing between children */
     }
 
     .current-weather-heading {
-        text-align: right;
+        font-size: 1.3rem;
+        font-weight: 600;
         color: white;
-        margin: 0 0 0.2rem 0;
-        font-size: 1.2rem;
-        font-weight: 550;
+        text-align: center;
+        margin: 0;
         padding: 0;
     }
-                
     .weather-header {
         display: flex;
         align-items: center; /* Keep everything vertically centered */
@@ -601,7 +589,7 @@ def setup_page():
     .metric-value {
         font-size: 0.7rem;
         font-weight: bold;
-        color: ffffff;
+        color: #ffffff;
     }
     
     .metric-label {
@@ -729,75 +717,212 @@ def render_forecasting(df, today):
         render_fallback_forecast(df, today)
 
 def render_current_weather(df, today):
-    """Render current weather section - ALL in one container"""
     try:
-        # Ensure we have a date column
-        if 'date' not in df.columns and 'datetime' in df.columns:
-            df['date'] = df['datetime'].dt.date
+        # Ensure we have the date column
+        if 'date' not in df.columns:
+            if 'datetime' in df.columns:
+                df = df.copy()
+                df['date'] = pd.to_datetime(df['datetime']).dt.date
+            else:
+                st.error("No date column found in data")
+                return
         
+        # Find today's data - handle multiple approaches
+        row_today = None
+        
+        # Method 1: Exact date match
         row_today = df[df["date"] == today]
-        if not row_today.empty:
-            r = row_today.iloc[0]
-            temp = float(r.get("temp", 27))
-            tmax = float(r.get("tempmax", 30))
-            tmin = float(r.get("tempmin", 23))
-            cond = str(r.get("conditions", "Rainy")).split(",")[0]
+        
+        # Method 2: If no exact match, find closest date
+        if row_today.empty and 'datetime' in df.columns:
+            df_dates = df.copy()
+            df_dates['date_only'] = pd.to_datetime(df_dates['datetime']).dt.date
+            row_today = df_dates[df_dates['date_only'] == today]
+        
+        # Method 3: Get the most recent data
+        if row_today.empty:
+            st.warning(f"No data found for {today}. Showing most recent available data.")
+            if 'datetime' in df.columns:
+                df_sorted = df.sort_values('datetime', ascending=False)
+                row_today = df_sorted.head(1)
+            else:
+                # Ultimate fallback
+                render_fallback_current_weather()
+                return
 
-            # Weather icon mapping
-            icon_map = {
-                "Clear": "☀️", "Partly Cloudy": "🌤️", "Cloudy": "☁️", "Light Rain": "🌧️",
-                "Rain": "🌧️", "Heavy Rain": "⛈️", "Snow": "❄️", "Thunderstorm": "⚡",
-                "Fog": "🌫️", "Windy": "💨", "Mostly Cloudy": "⛅", "Rainy": "🌧️",
-                "Partly cloudy": "🌤️", "Overcast": "☁️", "Sunny": "☀️"
-            }
-            icon = icon_map.get(cond, "🌤️")
+        if row_today.empty:
+            render_fallback_current_weather()
+            return
 
-            # SINGLE CONTAINER: icon, temp, min/max, AND metrics
-            st.markdown(
-                f"""
-                <div class="current-weather-full-container">
-                    <div class="current-weather-heading" margin-top:0rem; font-size:1.5rem; color: #ffffff; text-align: right;'>Current Weather</div>
-                    <div class="weather-header">
-                        <div class="weather-icon-temp">
-                            <div class="weather-icon">{icon}</div>
-                            <div>
-                                <div class="weather-temp">{temp:.1f}°C</div>
-                                <div class="weather-condition" style="display:flex; align-items:center;">
-                                    {cond}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="weather-minmax">
-                            Max: {tmax:.1f}°C<br>Min: {tmin:.1f}°C
-                        </div>
-                    </div>
-                    <div class="weather-metrics-row">
-                        <div class="weather-metric-item">
-                            <div class="metric-value">💧 {r.get('humidity', 33):.0f}%</div>
-                            <div class="metric-label">Humidity</div>
-                        </div>
-                        <div class="weather-metric-item">
-                            <div class="metric-value">🌧️ {r.get('precip', 34):.0f}%</div>
-                            <div class="metric-label">Precip</div>
-                        </div>
-                        <div class="weather-metric-item">
-                            <div class="metric-value">🧭 {r.get('winddir', 67):.0f}°</div>
-                            <div class="metric-label">Wind direction</div>
-                        </div>
-                        <div class="weather-metric-item">
-                            <div class="metric-value">🌬️ {r.get('windspeed', 67):.1f}</div>
-                            <div class="metric-label">Wind speed</div>
-                        </div>
-                    </div>
+        r = row_today.iloc[0]
+        
+        # Safe data extraction with defaults
+        temp = safe_float_get(r, "temp", 27.0)
+        tmax = safe_float_get(r, "tempmax", temp + 3)  # Default: current temp +3
+        tmin = safe_float_get(r, "tempmin", temp - 3)  # Default: current temp -3
+        cond = safe_str_get(r, "conditions", "Partly Cloudy").split(",")[0]
+        humidity = safe_float_get(r, "humidity", 50.0)
+        precip = safe_float_get(r, "precip", 0.0)
+        winddir = safe_float_get(r, "winddir", 0.0)
+        windspeed = safe_float_get(r, "windspeed", 0.0)
+
+        icon_map = {
+            "Clear": "☀️", "Partly Cloudy": "🌤️", "Cloudy": "☁️", "Light Rain": "🌧️",
+            "Rain": "🌧️", "Heavy Rain": "⛈️", "Snow": "❄️", "Thunderstorm": "⚡",
+            "Fog": "🌫️", "Windy": "💨", "Mostly Cloudy": "⛅", "Rainy": "🌧️",
+            "Partly cloudy": "🌤️", "Overcast": "☁️", "Sunny": "☀️",
+            "Scattered Clouds": "🌤️", "Broken Clouds": "☁️", "Few Clouds": "🌤️"
+        }
+        icon = icon_map.get(cond, "🌤️")
+
+        # Render everything in a single HTML block using components.html
+        import streamlit.components.v1 as components
+        
+        html_content = f"""
+        <div style="
+            background: linear-gradient(135deg, #3b7ff4 0%, #4054db 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 1.2rem 2rem;
+            margin: 0rem 0rem 0rem 0rem;
+            width: 93%;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            height: auto;
+            min-height: 120px;
+        ">
+            <!-- Title: "Current Weather" -->
+            <div style="
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: white;
+                margin-bottom: 0.6rem;
+                align-self: flex-start;
+            ">
+                Current Weather
+            </div>
+
+            <!-- Main content row -->
+            <div style="
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+                gap: 3rem;
+                width: 100%;
+            ">
+            <!-- Left: Icon + Temp -->
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="font-size: 4.5rem;">{icon}</div>
+                <div style="text-align: left;">
+                    <div style="font-size: 2.2rem; font-weight: bold; line-height: 1;">{temp:.1f}°C</div>
+                    <div style="font-size: 0.9rem; opacity: 0.8;">{cond}</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        else:
-            st.warning("No current weather data available")
+            </div>
+
+            <!-- Max/Min -->
+            <div style="text-align: left; font-size: 0.9rem; color: #ccccff; margin-top: 0.5rem;">
+                <div>Max: {tmax:.1f}°C</div>
+                <div>Min: {tmin:.1f}°C</div>
+            </div>
+
+            <!-- Humidity -->
+            <div style="text-align: center; font-size: 0.7rem; color: #ccccff">
+                <div style="font-size: 1rem; font-weight: bold; color: white; margin-bottom: 0.5rem;">💧{humidity:.0f}%</div>
+                <div>Humidity</div>
+            </div>
+
+            <!-- Precip -->
+            <div style="text-align: center; font-size: 0.7rem; color: #ccccff">
+                <div style="font-size: 1rem; font-weight: bold; color: white; margin-bottom: 0.5rem;">🌧️{precip:.0f}%</div>
+                <div>Precip</div>
+            </div>
+
+            <!-- Wind Dir -->
+            <div style="text-align: center; font-size: 0.7rem; color: #ccccff">
+                <div style="font-size: 1rem; font-weight: bold; color: white; margin-bottom: 0.5rem;">🧭{winddir:.0f}°</div>
+                <div>Wind direction</div>
+            </div>
+
+            <!-- Wind Speed -->
+            <div style="text-align: center; font-size: 0.7rem; color: #ccccff">
+                <div style="font-size: 1rem; font-weight: bold; color: white;margin-bottom: 0.5rem;">🌬️{windspeed:.1f}</div>
+                <div>Wind speed</div>
+            </div>
+        </div>
+        </div>
+        """
+        
+        components.html(html_content, height=180)
+        
     except Exception as e:
         st.error(f"Error rendering current weather: {e}")
+        render_fallback_current_weather()
 
+def safe_float_get(row, key, default=0.0):
+    """Safely get float value from row with fallback"""
+    try:
+        if key in row and pd.notna(row[key]):
+            return float(row[key])
+        return default
+    except (ValueError, TypeError):
+        return default
+
+def safe_str_get(row, key, default=""):
+    """Safely get string value from row with fallback"""
+    try:
+        if key in row and pd.notna(row[key]):
+            return str(row[key])
+        return default
+    except (ValueError, TypeError):
+        return default
+
+def render_fallback_current_weather():
+    """Render a fallback current weather when data is unavailable"""
+    st.markdown(
+        """
+        <div class="current-weather-full-container">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; width: 100%;">
+                <!-- Icon -->
+                <div style="text-align: center; flex: 2; min-width: 120px;">
+                    <div style="font-size: 2.8rem;">🌤️</div>
+                </div>
+
+                <div style="text-align: center; flex: 1; min-width: 100px;">
+                    <div style="font-size: 2.0rem; font-weight: bold; color: white;">27.0°C</div>
+                    <div style="font-size: 0.9rem; color: #e0e0ff;">Partly Cloudy</div>
+                </div>
+
+                <div style="text-align: center; flex: 1; min-width: 100px; padding-top: 0.7rem;">
+                    <div style="font-size: 0.9rem; color: #ccccff;">Max</div>
+                    <div style="font-size: 1.4rem; font-weight: bold; color: white;">30.0°</div>
+                    <div style="font-size: 0.9rem; color: #ccccff;">Min</div>
+                    <div style="font-size: 1.4rem; font-weight: bold; color: white;">24.0°</div>
+                </div>
+
+                <div style="text-align: center; flex: 1; min-width: 80px; padding-top: 0.5rem;">
+                    <div style="font-size: 0.85rem; color: #ccccff;">Humidity</div>
+                    <div style="font-size: 1.3rem; font-weight: bold; color: white;">50%</div>
+                </div>
+
+                <div style="text-align: center; flex: 1; min-width: 80px; padding-top: 0.5rem;">
+                    <div style="font-size: 0.85rem; color: #ccccff;">Precip</div>
+                    <div style="font-size: 1.3rem; font-weight: bold; color: white;">0%</div>
+                </div>
+
+                <div style="text-align: center; flex: 1; min-width: 100px; padding-top: 0.5rem; font-size: 0.85rem; color: #ccccff;">
+                    <div>Wind Dir</div>
+                    <div style="font-size: 1.3rem; font-weight: bold; color: white;">180°</div>
+                    <div style="margin-top: 0.4rem;">Wind Speed</div>
+                    <div style="font-size: 1.3rem; font-weight: bold; color: white;">10.0</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 def render_forecast_cards(df, today, future_df):
     """Render forecast cards with better error handling."""
     st.markdown("<h3 style='text-align:left; margin-top:0rem; font-size:1rem;'>Next 5 Days Temperature Forecast</h3>", unsafe_allow_html=True)
@@ -851,7 +976,6 @@ def render_forecast_cards(df, today, future_df):
                         background:#ffffff;
                         padding:0.3rem 0.7rem;
                         border-radius:14px;
-                        color: 1e293b;
                         width:100%;
                         display:flex;
                         justify-content:space-between;
@@ -862,7 +986,7 @@ def render_forecast_cards(df, today, future_df):
                             <div style="font-size:0.7rem; font-weight:600;">{day_abbr}</div>
                             <div style="font-size:0.7rem; opacity:0.85;">{date_str}</div>
                         </div>
-                        <div style="text-align:right; font-size:1.3rem; font-weight:600;">
+                        <div style="text-align:right; font-size:1.3rem; font-weight:600; color: #5286f1">
                             {temp:.2f}°C
                         </div>
                     </div>
@@ -1283,7 +1407,7 @@ def render_model_performance(metrics):
                     margin: 0.3rem 0.5rem;
                     border-radius:12px;
                     color:black;
-                    width:100%;
+                    width:90%;
                     display:flex;
                     flex-direction:row;
                     align-items:center;
@@ -1381,17 +1505,32 @@ def main():
                     st.session_state.auto_update_done = True
         # Sidebar
         with st.sidebar:
+            st.markdown(
+                """
+                <div style="
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: white;
+                    padding: 0.5rem 0.2rem 1.5rem 0.5rem;
+                    text-align: left;
+                    border-bottom: 1px solid rgba(255,255,255,0.2);
+                    margin-bottom: 0.8rem;
+                ">
+                    WeatherApp
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
             st.markdown('<div class="sidebar-title">Navigation Menu</div>', unsafe_allow_html=True)
             
-            pages = {
-                "Forecasting": "Weather Forecast",
-                "Past weather data": "Historical Data", 
-                "Model performance": "Model Info",
-                "Other settings": "Settings"
+            pages = pages = {
+                "Forecasting": ("🌤️", "Weather Forecast"),
+                "Past weather data": ("📊", "Historical Data"), 
+                "Model performance": ("📈", "Model Info"),
+                "Other settings": ("⚙️", "Settings")
             }
-            
-            for page_key, page_label in pages.items():
-                if st.button(page_label, width ="stretch", key=page_key):
+            for page_key, (icon, label) in pages.items():
+                if st.button(f"{icon} {label}", width ="stretch", key=page_key):
                     st.session_state.page = page_key
                     st.rerun()
             
