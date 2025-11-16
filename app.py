@@ -761,14 +761,14 @@ def render_current_weather(df, today):
                         <div class="weather-icon-temp">
                             <div class="weather-icon">{icon}</div>
                             <div>
-                                <div class="weather-temp">{temp:.0f}°C</div>
+                                <div class="weather-temp">{temp:.1f}°C</div>
                                 <div class="weather-condition" style="display:flex; align-items:center;">
                                     {cond}
                                 </div>
                             </div>
                         </div>
                         <div class="weather-minmax">
-                            Max: {tmax:.0f}°C<br>Min: {tmin:.0f}°C
+                            Max: {tmax:.1f}°C<br>Min: {tmin:.1f}°C
                         </div>
                     </div>
                     <div class="weather-metrics-row">
@@ -849,7 +849,7 @@ def render_forecast_cards(df, today, future_df):
                     f"""
                     <div style="
                         background:#ffffff;
-                        padding:0.3rem 1.0rem;
+                        padding:0.3rem 0.7rem;
                         border-radius:14px;
                         color: 1e293b;
                         width:100%;
@@ -863,7 +863,7 @@ def render_forecast_cards(df, today, future_df):
                             <div style="font-size:0.7rem; opacity:0.85;">{date_str}</div>
                         </div>
                         <div style="text-align:right; font-size:1.3rem; font-weight:600;">
-                            {temp:.0f}°C
+                            {temp:.2f}°C
                         </div>
                     </div>
                     """,
