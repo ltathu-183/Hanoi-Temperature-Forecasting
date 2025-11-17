@@ -2,7 +2,7 @@ name: Daily Weather & Prediction Update
 
 on:
   schedule:
-    - cron: '0 17 * * *'  # Runs daily at 17:00 UTC = 00:00 Hanoi (next day)
+    - cron: '0 18 * * *'  # Runs daily at 17:00 UTC = 00:00 Hanoi (next day)
   workflow_dispatch:      # Allows manual run from GitHub UI
 
 jobs:
@@ -24,10 +24,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Update weather data
-        run: python codes/update_weather_data.py
+        run: python notebooks/update_weather_data.py
 
       - name: Generate multi-horizon predictions
-        run: python codes/generate_full_multi_horizon_predictions.py
+        run: python notebooks/generate_full_multi_horizon_predictions.py
 
       - name: Commit and push updated data
         run: |
