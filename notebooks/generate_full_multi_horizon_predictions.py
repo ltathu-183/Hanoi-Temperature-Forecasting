@@ -11,7 +11,9 @@ import sys
 from pathlib import Path
 import yaml
 from datetime import datetime, date
-
+from zoneinfo import ZoneInfo  # Python 3.9+, built-in and works perfectly on Streamlit Cloud
+# or fallback for very old Python: import pytz; HANOI_TZ = pytz.timezone('Asia/Ho_Chi_Minh')
+HANOI_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 project_root = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "notebooks"))
@@ -58,7 +60,7 @@ def main():
         df = pd.read_csv(data_file, parse_dates=["datetime"])
         df = df.sort_values("datetime").reset_index(drop=True)
         last_data_date = df['datetime'].max().date()
-        today = date.today()
+        today = date.today(HANOI_TZ)
         print(f" Data last updated: {last_data_date} (today: {today})")
     except Exception as e:
         print(f" Data loading failed: {e}")
