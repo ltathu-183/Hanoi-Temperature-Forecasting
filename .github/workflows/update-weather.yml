@@ -2,7 +2,7 @@ name: Daily Weather & Prediction Update
 
 on:
   schedule:
-    - cron: '0 18 * * *'  # Triggers at 01:00 AM Hanoi time (UTC+7) each day
+    - cron: '0 19 * * *'  # Triggers at 02:00 AM Hanoi time (UTC+7) each day
   workflow_dispatch:      # Allows manual run from GitHub UI
 
 jobs:
