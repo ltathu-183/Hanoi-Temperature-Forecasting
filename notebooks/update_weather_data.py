@@ -14,7 +14,7 @@ import os
 
 load_dotenv()  # This loads from current working directory by default
 
-API_KEY = os.getenv("WEATHER_API_KEY")
+API_KEY = os.getenv("VISUAL_CROSSING_API_KEY")
 print(f"API_KEY loaded: {'Yes' if API_KEY else 'No'}")
 if API_KEY:
     print(f"API_KEY length: {len(API_KEY)}")
