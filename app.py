@@ -10,7 +10,9 @@ import threading
 import plotly.graph_objects as go
 import plotly.express as px
 import os
-
+from zoneinfo import ZoneInfo  # Python 3.9+, built-in and works perfectly on Streamlit Cloud
+# or fallback for very old Python: import pytz; HANOI_TZ = pytz.timezone('Asia/Ho_Chi_Minh')
+HANOI_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 # --- PATHS ---
 project_root = Path(__file__).parent
 sys.path.append(str(project_root))
@@ -85,7 +87,7 @@ def load_data():
         return create_fallback()
 
 def create_fallback():
-    dates = pd.date_range("2024-01-01", datetime.now(), freq='D')
+    dates = pd.date_range("2024-01-01", datetime.now(HANOI_TZ), freq='D')
     np.random.seed(42)
     return pd.DataFrame({
         'datetime': dates,
@@ -136,7 +138,7 @@ def get_5day_forecast(df):
                 results['date'] = pd.to_datetime(results['date']).dt.date
                 return results[['date', 'y_pred']].head(5).rename(columns={'y_pred': 'temp'})
     except: pass
-    today = datetime.now().date()
+    today = datetime.now(HANOI_TZ).date()
     return pd.DataFrame([{'date': today + timedelta(days=i+1), 'temp': round(27 + np.random.randn() * 2, 1)} for i in range(5)])
 
 # --- PAGE SETUP ---
@@ -223,7 +225,7 @@ def page_current(df):
             <div>
                 <div style="font-size: 1.4rem; font-weight: 600;">Hanoi, Vietnam</div>
                 <div style="font-size: 0.95rem; opacity: 0.9; margin-top: 4px;">
-                    {datetime.now().strftime('%A, %I:%M %p')}
+                    {datetime.now(HANOI_TZ).strftime('%A, %I:%M %p')}
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 1.5rem;">
@@ -262,7 +264,6 @@ def page_current(df):
             """, unsafe_allow_html=True)
 
 # --- FORECAST PAGE ---
-# --- FORECAST PAGE (FIXED: WITH 5-DAY CARDS + NAVBAR) ---
 def page_forecast(df, historical_pred_df, today, start_date_input=None, end_date_input=None):
     render_navbar()  # BACK BUTTON NOW WORKS
 
@@ -401,7 +402,7 @@ def page_forecast(df, historical_pred_df, today, start_date_input=None, end_date
 def page_historical(df):
     render_navbar()
     st.markdown("## Hanoi's Historical Temperature Trends")
-    today = datetime.now().date()
+    today = datetime.now(HANOI_TZ).date()
     df['date'] = pd.to_datetime(df['datetime']).dt.date
 
     col1, col2, col3, col4 = st.columns([1,1,1,2])
@@ -562,7 +563,7 @@ def main():
         if not is_streamlit_cloud():
             if not df.empty and 'datetime' in df.columns:
                 last = pd.to_datetime(df['datetime']).max().date()
-                today = datetime.now().date()
+                today = datetime.now(HANOI_TZ).date()
                 if today > last:
                     safe_data_update(after_pred=True)
         st.session_state.auto_update_done = True
@@ -572,7 +573,7 @@ def main():
     if page == 'current': 
         page_current(df)
     elif page == 'forecast':
-        today = datetime.now().date()
+        today = datetime.now(HANOI_TZ).date()
         historical_pred_df = load_multi_predictions()
 
         # Use session state for date persistence
@@ -588,7 +589,8 @@ def main():
 
     # Footer — ALWAYS SHOWN
     st.markdown("---")
-    st.caption(f"Hanoi Weather • Last updated 2 minutes ago • @{st.query_params.get('user', ['marin_369'])[0]}")
+    now_hanoi = datetime.now(HANOI_TZ)
+    st.caption(f"Hanoi Weather • Last updated {now_hanoi.strftime('%H:%M')} (GMT+7)")
 
 if __name__ == "__main__":
     main()
