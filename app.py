@@ -218,7 +218,6 @@ def page_current(df):
         box-shadow: 0 8px 20px rgba(0,0,0,0.15); font-family: 'Inter', sans-serif;
     ">
         <div style="position: absolute; top: 12px; right: 16px; font-size: 0.85rem; opacity: 0.9;">
-            Last updated 2 minutes ago
         </div>
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
             <div>
