@@ -11,6 +11,9 @@ from io import StringIO
 from dotenv import load_dotenv
 import streamlit as st
 import os
+from zoneinfo import ZoneInfo  # Python 3.9+, built-in and works perfectly on Streamlit Cloud
+# or fallback for very old Python: import pytz; HANOI_TZ = pytz.timezone('Asia/Ho_Chi_Minh')
+HANOI_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 load_dotenv()  # This loads from current working directory by default
 
@@ -97,7 +100,7 @@ def safe_save_csv(df: pd.DataFrame, path: Path, max_retries: int = 5) -> None:
 def main() -> None:
     df_raw = load_existing()
     last_raw_date = df_raw["datetime"].max().date()
-    today = datetime.now().date()  # ← CHANGED: get TODAY
+    today = datetime.now(HANOI_TZ).date()  # ← CHANGED: get TODAY
 
     if last_raw_date >= today:
         print("Dataset already up-to-date – nothing to do.")
