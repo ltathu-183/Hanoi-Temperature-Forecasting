@@ -2,17 +2,17 @@ name: Daily Weather & Prediction Update
 
 on:
   schedule:
-    - cron: '0 18 * * *'  # Runs daily at 17:00 UTC = 00:00 Hanoi (next day)
+    - cron: '0 18 * * *'  # Triggers at 01:00 AM Hanoi time (UTC+7) each day
   workflow_dispatch:      # Allows manual run from GitHub UI
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    env:
+      VISUAL_CROSSING_API_KEY: ${{ secrets.VISUAL_CROSSING_API_KEY }}  
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.VISUAL_CROSSING_API_KEY }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
